@@ -1,0 +1,12 @@
+.codex
+*.log
+.DS_Store
+
+# Local database and runtime artifacts
+hydromart_sales.db
+
+# Local backend credentials
+api/config.php
+
+# Frontend local environment
+web-poc/.env

@@ -1,0 +1,114 @@
+{
+  "Sheet1": [
+    [
+      "FRAMEWORK WEB DATABASE - HUI"
+    ],
+    [],
+    [
+      "No.",
+      "Nama Modul",
+      "Fungsi Utama",
+      "Penjelasan Fungsi Modul",
+      "Breakdown Fungsi Modul",
+      "Fitur Dalam Modul"
+    ],
+    [
+      1,
+      "Dashboard",
+      "Main overview",
+      "Halaman utama yang memberikan gambaran cepat untuk Sales agar dapat melihat target dan jadwal merek.",
+      "a) Reminder Hari Ini: Daftar perusahaan yang filternya harus diganti dalam waktu dekat (H - X)"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "b) Statistik Penjualan: Grafik performa sales bulanan (seberapa banyak sales input data client) -> jika butuh"
+    ],
+    [
+      2,
+      "Master data",
+      "Management",
+      "Menu untuk mengelola data dasar agar database tetap rapi",
+      "a) Data Company: List perusahaan klien (tergantung dari sales)",
+      "Fitur: Tambah / Edit alamat, kategori industri dan status (data perusahaan masih aktif atau tidak)"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "b) Data PIC: Sub-menu di dalam Company",
+      "Fitur: Nama PIC, jabatan, nomor WhatsApp / Telepon, tanggal lahir dan email (satu company bisa memiliki banyak PIC)"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "c) User Management (khusus Admin / Supervisor): Pengaturan otoritas akun sales, hak akses, dan audit log"
+    ],
+    [
+      3,
+      "Modul Sales",
+      "Aktivitas Lapangan",
+      "Inti dari pencatatan product dan masa ganti filter di lokasi",
+      "a) Pencatatan Instalasi: Form untuk menambah data filter baru di lokasi klien",
+      "Input: Nama Produk (Free Text), Tanggal Pemasangan, dan Estimasi Tanggal Penggantian"
+    ],
+    [
+      4,
+      "Modul Prospecting",
+      "Smart Prospecting",
+      "Alat bantu Sales untuk merencanakan kunjungan agar lebih efisien (hemat bensin dan waktu)",
+      "a) Search by Region: Pencarian perusahaan berdasarkan area / kota"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "b) Nearby Prospecting: Menampilkan daftar klien yang masa pergantian filternya sudah dekat (misal: dalam 30 hari ke depan) di wilayah tertentu*"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "*Tujuannya: Jika Sales sedang ke Daerah A untuk satu klien, dia bisa sekalian mampir ke 3 klien lain di Daerah A yang filternya sudah mulai kotor"
+    ],
+    [
+      5,
+      "Modul Work Order",
+      "Daily Task",
+      "Memantau status dan pengerjaan",
+      "a) Filter Lifecycle Tracking: Daftar filter yang akan habis masa pakainya"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "b) Update Status: Reminder Sent, Offering Product, Scheduled for Replacement, atau Done, Skip, Follow up*"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "*Follow-up Note: Catatan jika klien menunda penggantian agar sistem bisa memajukan jadwal reminder berikutnya"
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      "c) Monitor ulang tahun PIC"
+    ],
+    [],
+    [
+      "semua data tidak bisa dihapus"
+    ]
+  ]
+}
