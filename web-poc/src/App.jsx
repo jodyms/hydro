@@ -4,6 +4,12 @@ import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, 
 // --- Constants (no more dataMock.js) ---
 let STATUS_OPTIONS = ['Reminder Sent', 'Offering Product', 'Scheduled for Replacement', 'Done', 'Skip', 'Follow up'];
 const COMPANY_TYPES = ['Customer', 'Prospek'];
+const DASHBOARD_SCHEDULE_FIELDS = [
+  { value: 'followup_date', label: 'Tgl Follow Up', shortLabel: 'Follow Up' },
+  { value: 'visit_schedule_date', label: 'Jadwal Kunjungan', shortLabel: 'Visit' },
+  { value: 'installation_date', label: 'Tgl Instalasi', shortLabel: 'Pasang' },
+  { value: 'replacement_date', label: 'Target Ganti', shortLabel: 'Target' }
+];
 const ACTIVITY_FIELD_LABELS = {
   company_name: 'Company',
   product_name: 'Produk',
@@ -53,6 +59,69 @@ const formatActivityFieldValue = (key, value) => {
   if (key === 'status_active') return String(value) === '1' ? 'Aktif' : 'Non-Aktif';
   return String(value);
 };
+
+const parseDateValue = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if ([year, month, day].some(Number.isNaN)) return null;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getDiffDaysFromToday = (value) => {
+  const targetDate = parseDateValue(value);
+  if (!targetDate) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.ceil((targetDate - today) / 86400000);
+};
+
+const formatDiffDaysLabel = (diffDays) => {
+  if (diffDays === null || diffDays === undefined) return '-';
+  if (diffDays < 0) return `Terlewat ${Math.abs(diffDays)} hari!`;
+  if (diffDays === 0) return 'HARI INI!';
+  return `H - ${diffDays}`;
+};
+
+function ScheduleDateSummary({ item, activeField, includeProduct = false }) {
+  if (!item) return <span style={{ color: 'var(--text-muted)' }}>-</span>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '190px' }}>
+      {includeProduct && (
+        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem' }}>
+          {item.product_name || '-'}
+        </div>
+      )}
+      {DASHBOARD_SCHEDULE_FIELDS.map(field => {
+        const isActive = field.value === activeField;
+        return (
+          <div
+            key={field.value}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '8px',
+              alignItems: 'center',
+              fontSize: '0.75rem',
+              background: isActive ? '#e0f2fe' : '#f8fafc',
+              border: `1px solid ${isActive ? '#bae6fd' : '#e2e8f0'}`,
+              borderRadius: '8px',
+              padding: '5px 8px'
+            }}
+          >
+            <span style={{ color: isActive ? '#0369a1' : '#64748b', fontWeight: isActive ? 700 : 600 }}>
+              {field.shortLabel}
+            </span>
+            <span style={{ color: '#0f172a', fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap' }}>
+              {item[field.value] || '-'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const parseActivityPayload = (raw) => {
   if (!raw) return [];
@@ -184,7 +253,6 @@ function Sidebar({ permissions, user }) {
     { path: '/sales', label: 'Input Instalasi/Offer', icon: PlusSquare, permission: 'sales_read' },
     { path: '/installation', label: 'Data Instalasi', icon: Wrench, permission: 'installation_read' },
     { path: '/prospecting', label: 'Smart Prospecting', icon: MapPin, permission: 'prospecting_read' },
-    { path: '/work-order', label: 'Work Order', icon: ClipboardList, permission: 'workorder_read' },
     { path: '/history', label: 'History & Rekam Jejak', icon: Archive, permission: 'history_read' },
     { type: 'header', label: 'Master Data' },
     { path: '/company', label: 'Data Company', icon: Database, permission: 'company_read' },
@@ -352,7 +420,7 @@ function Pagination({ totalItems, itemsPerPage, currentPage, onPageChange }) {
   );
 }
 
-function CompanyProductsModal({ company, title, items, onClose, renderAction, showWorkOrderFields = false, updateStatus, updateDate, updateNotes, onBulkRenew }) {
+function CompanyProductsModal({ company, title, items, onClose, renderAction, showWorkOrderFields = false, updateStatus, updateDate, updateNotes, onBulkRenew, scheduleDateField = 'replacement_date', scheduleDateLabel = 'Target Ganti/Offer', showDateSummary = false }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState([]);
   const MODAL_ITEMS_PER_PAGE = 5;
@@ -414,7 +482,7 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
                   )}
                   <th>Nama Produk</th>
                   <th>Tgl Pasang</th>
-                  <th>Target Ganti/Offer</th>
+                  <th>{scheduleDateLabel}</th>
                   <th>Status Transaksi</th>
                   {showWorkOrderFields && <th>Update Status</th>}
                   {showWorkOrderFields && <th>Follow Up Note</th>}
@@ -424,7 +492,8 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
               <tbody>
                 {currentItems.map(item => {
                   const isSelected = selectedIds.includes(item.id);
-                  const diffDays = Math.ceil((new Date(item.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+                  const scheduleDateValue = item[scheduleDateField] || '';
+                  const diffDays = getDiffDaysFromToday(scheduleDateValue);
                   return (
                     <tr key={item.id} style={isSelected ? { backgroundColor: '#f0f9ff' } : {}}>
                       {onBulkRenew && (
@@ -437,16 +506,21 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
                       {showWorkOrderFields ? (
                         <td>
                           <input type="date" className="form-control" style={{ padding: '6px', width: '130px', borderColor: item.status === 'Follow up' ? '#0ea5e9' : 'var(--border)' }} value={item.replacement_date} onChange={(e) => updateDate(item.id, e.target.value)} title="Ubah jadwal jika diundur" />
-                          <div style={{ marginTop: '4px', fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
-                            {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
+                          <div style={{ marginTop: '4px', fontSize: '0.75rem', color: diffDays !== null && diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
+                            {formatDiffDaysLabel(diffDays)}
                           </div>
                         </td>
                       ) : (
                         <td>
-                          <div>{item.replacement_date}</div>
-                          <div style={{ fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
-                            {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
+                          <div>{scheduleDateValue || '-'}</div>
+                          <div style={{ fontSize: '0.75rem', color: diffDays !== null && diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
+                            {formatDiffDaysLabel(diffDays)}
                           </div>
+                          {showDateSummary && (
+                            <div style={{ marginTop: '8px' }}>
+                              <ScheduleDateSummary item={item} activeField={scheduleDateField} />
+                            </div>
+                          )}
                         </td>
                       )}
 
@@ -668,21 +742,23 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
   const [filterRegion, setFilterRegion] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDays, setFilterDays] = useState('90');
+  const [scheduleField, setScheduleField] = useState('replacement_date');
   const [currentPage, setCurrentPage] = useState(1);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalCompany, setModalCompany] = useState(null);
+  const [expandedCompanies, setExpandedCompanies] = useState({});
 
-  useEffect(() => { setCurrentPage(1); }, [search, filterRegion, filterType, filterDays]);
+  const selectedScheduleOption = DASHBOARD_SCHEDULE_FIELDS.find(option => option.value === scheduleField) || DASHBOARD_SCHEDULE_FIELDS[0];
 
   const groupedUpcoming = useMemo(() => {
     const list = installations.map(inst => {
       const comp = companies.find(c => Number(c.id) === Number(inst.company_id));
-      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-      return { ...inst, comp, diffDays };
+      const scheduleDate = inst[scheduleField];
+      const diffDays = getDiffDaysFromToday(scheduleDate);
+      return { ...inst, comp, scheduleDate, diffDays };
     }).filter(i => {
       if (!i.comp) return false;
       if (i.status === 'Done' || i.is_history) return false;
-      if (i.diffDays > parseInt(filterDays)) return false;
+      if (!i.scheduleDate || i.diffDays === null) return false;
+      if (filterDays !== 'all' && i.diffDays > parseInt(filterDays, 10)) return false;
       if (filterRegion && i.comp.region_name !== filterRegion) return false;
       if (filterType && i.comp.type !== filterType) return false;
       if (search && !i.comp.name.toLowerCase().includes(search.toLowerCase()) && !i.product_name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -698,12 +774,20 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
       if (i.diffDays < groups[i.company_id].minDiffDays) groups[i.company_id].minDiffDays = i.diffDays;
     });
 
-    return Object.values(groups).sort((a, b) => a.minDiffDays - b.minDiffDays);
-  }, [installations, companies, search, filterRegion, filterType, filterDays]);
+    return Object.values(groups)
+      .map(group => ({ ...group, items: group.items.sort((a, b) => a.diffDays - b.diffDays) }))
+      .sort((a, b) => a.minDiffDays - b.minDiffDays);
+  }, [installations, companies, search, filterRegion, filterType, filterDays, scheduleField]);
 
   if (!can('dashboard_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>dashboard_read</code> untuk melihat ringkasan ini.</p></div>;
 
-  const currentData = groupedUpcoming.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(groupedUpcoming.length / ITEMS_PER_PAGE));
+  const visiblePage = Math.min(currentPage, totalPages);
+  const currentData = groupedUpcoming.slice((visiblePage - 1) * ITEMS_PER_PAGE, visiblePage * ITEMS_PER_PAGE);
+
+  const toggleExpandCompany = (companyId) => {
+    setExpandedCompanies(prev => ({ ...prev, [companyId]: !prev[companyId] }));
+  };
 
   const currentMonth = new Date().getMonth() + 1;
   const birthdaysThisMonth = pics.filter(p => {
@@ -771,8 +855,11 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
       <div className="card-view" style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="card-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <Calendar size={24} color="#0ea5e9" /> Reminder Hari Ini (H - X)
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: '999px', border: '1px solid #bae6fd' }}>
+                Berdasarkan: {selectedScheduleOption.label}
+              </span>
             </h2>
           </div>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
@@ -790,6 +877,12 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
             </select>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f9ff', padding: '0 12px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>Berdasarkan:</span>
+              <select className="form-control" style={{ border: 'none', background: 'transparent', width: '170px', cursor: 'pointer' }} value={scheduleField} onChange={e => setScheduleField(e.target.value)}>
+                {DASHBOARD_SCHEDULE_FIELDS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f9ff', padding: '0 12px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>Urutan Jadwal:</span>
               <select className="form-control" style={{ border: 'none', background: 'transparent', width: '150px', cursor: 'pointer' }} value={filterDays} onChange={e => setFilterDays(e.target.value)}>
                 <option value="7">H - 7 Hari</option>
@@ -798,59 +891,117 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                 <option value="60">H - 60 Hari</option>
                 <option value="90">H - 90 Hari (3 Bulan)</option>
                 <option value="180">H - 180 Hari (6 Bulan)</option>
-                <option value="999">Tampilkan Semua (H- & H+)</option>
+                <option value="all">Tampilkan Semua (H- & H+)</option>
               </select>
             </div>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead style={{ background: '#f1f5f9' }}>
-              <tr>
-                <th>Perusahaan</th>
-                <th>Tipe</th>
-                <th>Region</th>
-                <th>Jumlah Target Evaluasi</th>
-                <th>Urgensi Tertinggi</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentData.length === 0 ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>Mantaap! Tidak ada jadwal yang perlu ditangani sesuai filter ini.</td></tr>
-              ) : currentData.map((group, idx) => {
-                if (!group.company) return null;
-                return (
-                  <tr key={group.company.id || idx} style={{ borderLeft: group.minDiffDays <= 7 ? '4px solid #ef4444' : group.minDiffDays <= 14 ? '4px solid #f59e0b' : '4px solid transparent' }}>
-                    <td style={{ fontWeight: 600 }}>{group.company.name}</td>
-                    <td><span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{group.company.type}</span></td>
-                    <td>{group.company.region_name || '-'}</td>
-                    <td style={{ fontWeight: 'bold' }}>{group.items.length} Item</td>
-                    <td style={{ color: group.minDiffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 'bold' }}>
-                      {group.minDiffDays < 0 ? `Terlewat ${Math.abs(group.minDiffDays)} hari!` : group.minDiffDays === 0 ? 'HARI INI!' : `H - ${group.minDiffDays}`}
-                    </td>
-                    <td>
-                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.875rem' }} onClick={() => setModalCompany(group)}>
-                        <Eye size={16} /> Lihat Detail Produk
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <Pagination totalItems={groupedUpcoming.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
-      </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {currentData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--text-muted)', border: '1px dashed #cbd5e1', borderRadius: '16px', background: '#f8fafc' }}>
+              Mantaap! Tidak ada jadwal yang perlu ditangani sesuai filter ini.
+            </div>
+          ) : currentData.map((group, idx) => {
+            if (!group.company) return null;
+            const isExpanded = !!expandedCompanies[group.company.id];
+            const primaryItem = group.items[0] || null;
+            return (
+              <div key={group.company.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '18px', overflow: 'hidden', background: 'white', boxShadow: isExpanded ? '0 12px 24px -18px rgba(15, 23, 42, 0.35)' : 'none' }}>
+                <div
+                  onClick={() => toggleExpandCompany(group.company.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    padding: '18px 20px',
+                    cursor: 'pointer',
+                    background: isExpanded ? '#f8fafc' : 'white',
+                    borderLeft: group.minDiffDays <= 7 ? '4px solid #ef4444' : group.minDiffDays <= 14 ? '4px solid #f59e0b' : '4px solid #cbd5e1'
+                  }}
+                >
+                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                    <ChevronRight size={18} color="#64748b" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{group.company.name}</span>
+                      <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{group.company.type}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '4px 10px', borderRadius: '999px' }}>
+                        {group.items.length} Product
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '6px', fontSize: '0.82rem', color: '#64748b' }}>
+                      <span><MapPin size={12} style={{ verticalAlign: 'middle' }} /> {group.company.region_name || '-'}</span>
+                      <span>Prioritas: <strong style={{ color: '#0f172a' }}>{primaryItem?.product_name || '-'}</strong></span>
+                      <span>{selectedScheduleOption.shortLabel}: <strong style={{ color: '#0369a1' }}>{primaryItem?.[scheduleField] || '-'}</strong></span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', minWidth: '140px' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Urgensi Tertinggi</div>
+                    <div style={{ marginTop: '4px', fontSize: '0.95rem', fontWeight: 800, color: group.minDiffDays <= 7 ? '#ef4444' : '#f59e0b' }}>
+                      {formatDiffDaysLabel(group.minDiffDays)}
+                    </div>
+                    <div style={{ marginTop: '6px', fontSize: '0.76rem', color: '#64748b' }}>
+                      {isExpanded ? 'Sembunyikan detail' : 'Lihat detail product'}
+                    </div>
+                  </div>
+                </div>
 
-      {modalCompany && (
-        <CompanyProductsModal
-          company={modalCompany.company}
-          title="Detail Target Follow-up / Penggantian"
-          items={modalCompany.items}
-          onClose={() => setModalCompany(null)}
-        />
-      )}
+                {isExpanded && (
+                  <div style={{ borderTop: '1px solid #e2e8f0', padding: '18px 20px 20px 20px' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="data-table" style={{ margin: 0 }}>
+                        <thead style={{ background: '#f8fafc' }}>
+                          <tr>
+                            <th>Product</th>
+                            {DASHBOARD_SCHEDULE_FIELDS.map(field => (
+                              <th
+                                key={field.value}
+                                style={field.value === scheduleField ? { background: '#e0f2fe', color: '#0369a1' } : undefined}
+                              >
+                                {field.label}
+                              </th>
+                            ))}
+                            <th>Status</th>
+                            <th>Urgensi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.items.map(item => (
+                            <tr key={item.id}>
+                              <td>
+                                <div style={{ fontWeight: 700, color: '#0f172a' }}>{item.product_name}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>PIC: {item.assigned_to_name || 'Unassigned'}</div>
+                              </td>
+                              {DASHBOARD_SCHEDULE_FIELDS.map(field => (
+                                <td
+                                  key={field.value}
+                                  style={field.value === scheduleField ? { background: '#f0f9ff' } : undefined}
+                                >
+                                  {item[field.value] || '-'}
+                                </td>
+                              ))}
+                              <td>
+                                <span className={`badge ${item.status === 'Done' ? 'badge-success' : item.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>
+                                  {item.status}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: 700, color: item.diffDays !== null && item.diffDays <= 7 ? '#ef4444' : '#f59e0b' }}>
+                                {formatDiffDaysLabel(item.diffDays)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <Pagination totalItems={groupedUpcoming.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={visiblePage} onPageChange={setCurrentPage} />
+      </div>
 
       {/* Sidebar: Birthdays & Quick Stats */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '24px' }}>
@@ -2029,57 +2180,58 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                     const hasNewValues = newValues.length > 0;
 
                     return (
-                    <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: idx % 2 === 0 ? '#f8fafc' : 'white', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
-                        {idx + 1}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                          <div>
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {item.action_type === 'CREATE' && <span className="badge badge-info" style={{ fontSize: '9px' }}>ADD</span>}
-                              {item.action_type === 'EDIT' && <span className="badge badge-warning" style={{ fontSize: '9px' }}>EDIT</span>}
-                              {item.action_type === 'RENEW' && <span className="badge badge-success" style={{ fontSize: '9px' }}>RENEW</span>}
-                              {item.action_type === 'STATUS_CHANGE' && <span className="badge" style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e' }}>STATUS</span>}
-                              {item.action_type === 'SCHEDULE_VISIT' && <span className="badge" style={{ fontSize: '9px', background: '#dcfce7', color: '#166534' }}>VISIT</span>}
-                              {item.action_type === 'TOGGLE' && <span className="badge" style={{ fontSize: '9px', background: '#e2e8f0', color: '#475569' }}>STATUS</span>}
-                              {item.description}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                              Tanggal: {new Date(item.created_at).toLocaleString('id-ID')}
+                      <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: idx % 2 === 0 ? '#f8fafc' : 'white', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
+                          {idx + 1}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {item.action_type === 'CREATE' && <span className="badge badge-info" style={{ fontSize: '9px' }}>ADD</span>}
+                                {item.action_type === 'EDIT' && <span className="badge badge-warning" style={{ fontSize: '9px' }}>EDIT</span>}
+                                {item.action_type === 'RENEW' && <span className="badge badge-success" style={{ fontSize: '9px' }}>RENEW</span>}
+                                {item.action_type === 'STATUS_CHANGE' && <span className="badge" style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e' }}>STATUS</span>}
+                                {item.action_type === 'SCHEDULE_VISIT' && <span className="badge" style={{ fontSize: '9px', background: '#dcfce7', color: '#166534' }}>VISIT</span>}
+                                {item.action_type === 'TOGGLE' && <span className="badge" style={{ fontSize: '9px', background: '#e2e8f0', color: '#475569' }}>STATUS</span>}
+                                {item.description}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
+                                Tanggal: {new Date(item.created_at).toLocaleString('id-ID')}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        {(hasOldValues || hasNewValues) && (
-                          <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: hasOldValues && hasNewValues ? '1fr 1fr' : '1fr', gap: '12px' }}>
-                            {hasOldValues && (
-                              <div>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sebelum</div>
-                                <div style={{ display: 'grid', gap: '6px' }}>
-                                  {oldValues.map(entry => (
-                                    <div key={`old-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
-                                  ))}
+                          {(hasOldValues || hasNewValues) && (
+                            <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: hasOldValues && hasNewValues ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                              {hasOldValues && (
+                                <div>
+                                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sebelum</div>
+                                  <div style={{ display: 'grid', gap: '6px' }}>
+                                    {oldValues.map(entry => (
+                                      <div key={`old-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {hasNewValues && (
-                              <div>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sesudah</div>
-                                <div style={{ display: 'grid', gap: '6px' }}>
-                                  {newValues.map(entry => (
-                                    <div key={`new-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
-                                  ))}
+                              )}
+                              {hasNewValues && (
+                                <div>
+                                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sesudah</div>
+                                  <div style={{ display: 'grid', gap: '6px' }}>
+                                    {newValues.map(entry => (
+                                      <div key={`new-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
+                          )}
+                          <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <User size={12} /> Oleh: <strong style={{ color: '#64748b' }}>{item.user_name || 'System'}</strong>
                           </div>
-                        )}
-                        <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <User size={12} /> Oleh: <strong style={{ color: '#64748b' }}>{item.user_name || 'System'}</strong>
                         </div>
                       </div>
-                    </div>
-                  )})}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -2955,15 +3107,27 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
   );
 }
 
+const getLogBadgeClass = (action) => {
+  switch (action) {
+    case 'RENEW': return 'badge-success';
+    case 'CREATE': return 'badge-info';
+    case 'EDIT': return 'badge-warning';
+    case 'STATUS_CHANGE': return 'badge-danger';
+    default: return 'badge-secondary';
+  }
+};
+
 function HistoryPage({ installations, companies, can, regions }) {
   const [search, setSearch] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [modalCompany, setModalCompany] = useState(null);
+  const [expandedCompanies, setExpandedCompanies] = useState(new Set());
+  const [companyLogs, setCompanyLogs] = useState({});
+  const [loadingLogs, setLoadingLogs] = useState(new Set());
+  const [expandedDiffs, setExpandedDiffs] = useState(new Set());
+  const fetchedRef = useRef(new Set());
 
   useEffect(() => { setCurrentPage(1); }, [search, filterRegion]);
-
-  if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
 
   const historicalGroups = useMemo(() => {
     const list = installations.filter(i => {
@@ -2988,13 +3152,125 @@ function HistoryPage({ installations, companies, can, regions }) {
 
   const currentData = historicalGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  useEffect(() => {
+    if (!currentData.length) return;
+    const missingIds = currentData
+      .map(g => g.company.id)
+      .filter(id => !fetchedRef.current.has(id));
+    if (!missingIds.length) return;
+
+    missingIds.forEach(id => fetchedRef.current.add(id));
+    setLoadingLogs(prev => {
+      const next = new Set(prev);
+      missingIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    Promise.allSettled(
+      missingIds.map(id =>
+        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
+          .then(r => r.json())
+      )
+    ).then(results => {
+      const nextLogs = {};
+      results.forEach((res, idx) => {
+        const companyId = missingIds[idx];
+        nextLogs[companyId] = (res.status === 'fulfilled' && res.value.status === 'success')
+          ? res.value.data : [];
+      });
+      setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
+      setLoadingLogs(prev => {
+        const next = new Set(prev);
+        missingIds.forEach(id => next.delete(id));
+        return next;
+      });
+    });
+  }, [currentData]);
+
+  if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
+
+  const toggleExpand = async (companyId) => {
+    const next = new Set(expandedCompanies);
+    if (next.has(companyId)) {
+      next.delete(companyId);
+      setExpandedCompanies(next);
+      return;
+    }
+    next.add(companyId);
+    setExpandedCompanies(next);
+
+    if (companyLogs[companyId]) return;
+
+    setLoadingLogs(prev => new Set(prev).add(companyId));
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${companyId}`);
+      const json = await res.json();
+      if (json.status === 'success') {
+        setCompanyLogs(prev => ({ ...prev, [companyId]: json.data }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+    }
+    setLoadingLogs(prev => {
+      const n = new Set(prev);
+      n.delete(companyId);
+      return n;
+    });
+  };
+
+  const toggleDiff = (logId) => {
+    const next = new Set(expandedDiffs);
+    if (next.has(logId)) next.delete(logId);
+    else next.add(logId);
+    setExpandedDiffs(next);
+  };
+
+  const renderDiff = (oldRaw, newRaw) => {
+    const oldVals = parseActivityPayload(oldRaw);
+    const newVals = parseActivityPayload(newRaw);
+    if (!oldVals.length && !newVals.length) return <em style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tidak ada perubahan field</em>;
+
+    const allKeys = new Set([...oldVals.map(o => o.key), ...newVals.map(n => n.key)]);
+    const changes = [];
+    allKeys.forEach(key => {
+      const oldV = oldVals.find(o => o.key === key);
+      const newV = newVals.find(n => n.key === key);
+      const oldValue = oldV ? oldV.value : '-';
+      const newValue = newV ? newV.value : '-';
+      if (oldValue !== newValue) {
+        changes.push({ label: formatActivityFieldLabel(key), old: oldValue, new: newValue });
+      }
+    });
+
+    if (!changes.length) return <em style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tidak ada perubahan field</em>;
+
+    return (
+      <table style={{ width: '100%', fontSize: '0.75rem', marginTop: '8px', borderCollapse: 'collapse' }}>
+        <thead><tr style={{ background: '#f1f5f9' }}>
+          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Field</th>
+          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Lama</th>
+          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Baru</th>
+        </tr></thead>
+        <tbody>
+          {changes.map((c, idx) => (
+            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+              <td style={{ padding: '4px 8px', fontWeight: 600 }}>{c.label}</td>
+              <td style={{ padding: '4px 8px', color: '#ef4444' }}>{c.old}</td>
+              <td style={{ padding: '4px 8px', color: '#22c55e' }}>{c.new}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
   return (
     <div className="page-container">
       <h1 className="page-title">Historical & Record Perpanjangan</h1>
       <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Modul khusus menampilkan kumpulan log audit produk terdahulu yang sudah digantikan / diperpanjang (*Historical records*).</p>
       <div className="card-view">
         <div className="card-header" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="Search product or company..." className="search-input" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: '200px' }} />
+          <input type="text" placeholder="Search company..." className="search-input" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: '200px' }} />
           <select className="form-control" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
             <option value="">Semua Wilayah</option>
             {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
@@ -3009,61 +3285,62 @@ function HistoryPage({ installations, companies, can, regions }) {
             </tr>
           </thead>
           <tbody>
-            {currentData.map(group => {
-              const displayItems = group.items.slice(0, 5);
-              return (
-                <tr key={group.company.id}>
-                  <td style={{ fontWeight: 600, verticalAlign: 'top' }}>{group.company.name}</td>
-                  <td style={{ verticalAlign: 'top' }}>{group.company.region_name}</td>
-                  <td style={{ verticalAlign: 'top' }}>
-                    <div style={{ fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>{group.items.length} Record Terarsip</div>
-                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {displayItems.map(item => (
-                        <li key={item.id}>
-                          <strong>{item.productName}</strong> <br />
-                          <span style={{ color: 'var(--text-muted)' }}>Diganti Pada: {item.replacementDate}</span>
-                          {item.auditLogs && item.auditLogs.length > 0 && (
-                            <div style={{ fontSize: '0.75rem', fontStyle: 'italic', marginTop: '2px', color: '#94a3b8' }}>Log: {item.auditLogs.map(l => l.action).join(', ')}</div>
+            {currentData.map(group => (
+              <tr key={group.company.id}>
+                <td style={{ fontWeight: 600, verticalAlign: 'top' }}>{group.company.name}</td>
+                <td style={{ verticalAlign: 'top' }}>{group.company.region_name}</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  <div
+                    onClick={() => toggleExpand(group.company.id)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#0f172a' }}
+                  >
+                    {expandedCompanies.has(group.company.id) ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                    <Archive size={16} style={{ color: '#64748b' }} />
+                    {loadingLogs.has(group.company.id) ? 'Memuat log...' : `${companyLogs[group.company.id]?.length || '0'} Log Aktivitas`}
+                  </div>
+
+                  {expandedCompanies.has(group.company.id) && !loadingLogs.has(group.company.id) && (
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {(companyLogs[group.company.id] || []).map((log) => (
+                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '6px', padding: '10px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span className={`badge ${getLogBadgeClass(log.action_type)}`}>{log.action_type}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                            <strong>Oleh:</strong> {log.user_name || 'System'}
+                          </div>
+                          {log.description && (
+                            <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '8px' }}>
+                              {log.description}
+                            </div>
                           )}
-                        </li>
+                          {(log.old_values || log.new_values) && (
+                            <>
+                              <button
+                                onClick={() => toggleDiff(log.id)}
+                                style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
+                              >
+                                {expandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
+                              </button>
+                              {expandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
+                            </>
+                          )}
+                        </div>
                       ))}
-                    </ul>
-                    {group.items.length > 5 && (
-                      <div style={{ marginTop: '12px' }}>
-                        <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600, color: '#0ea5e9', borderColor: '#bae6fd' }} onClick={() => setModalCompany(group)}>
-                          <Archive size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                          Lihat {group.items.length - 5} riwayat history lainnya (Pop-up Mode)
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+                      {(companyLogs[group.company.id] || []).length === 0 && (
+                        <em style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
             {currentData.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', color: 'gray' }}>Belum ada data history perpanjangan.</td></tr>}
           </tbody>
         </table>
         <Pagination totalItems={historicalGroups.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
-
-      {modalCompany && (
-        <CompanyProductsModal
-          company={modalCompany.company}
-          title="Seluruh Log Historical Products"
-          items={modalCompany.items}
-          onClose={() => setModalCompany(null)}
-          renderAction={(item) => (
-            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-              {(!item.auditLogs || item.auditLogs.length === 0) ? <em>Tidak ada log detail</em> : item.auditLogs.map((l, idx) => (
-                <div key={idx} style={{ marginBottom: '4px' }}>
-                  <strong>[{l.date}]</strong> <br />
-                  <span style={{ color: '#0ea5e9' }}>{l.action}</span> (User: {l.user})
-                </div>
-              ))}
-            </div>
-          )}
-        />
-      )}
     </div>
   );
 }
