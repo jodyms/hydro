@@ -126,6 +126,8 @@ CREATE TABLE `installations` (
   `maintenance_cycle_unit` ENUM('Days', 'Months', 'Years'), 
   
   `replacement_date` DATE, -- Automatically calculated and populated by Application based on cycle limits
+  `visit_schedule_date` DATE,
+  `followup_date` DATE,
   `status` VARCHAR(100),
   `is_history` BOOLEAN DEFAULT FALSE,
   `assigned_to` INT, -- Direct ownership: which sales user is responsible for this WO

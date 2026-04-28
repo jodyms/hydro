@@ -4,9 +4,35 @@ require 'db.php';
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 if ($action === 'list') {
+    $user_id = $_GET['user_id'] ?? null;
+    $show_all = isset($_GET['show_all']) ? ($_GET['show_all'] === 'true') : true;
+
     try {
-        $stmt = $pdo->prepare("SELECT p.*, c.name as company_name, u2.username as last_editor_name FROM company_pics p JOIN companies c ON p.company_id = c.id LEFT JOIN users u2 ON p.updated_by = u2.id ORDER BY p.status ASC, p.name ASC");
-        $stmt->execute();
+        $base_query = "SELECT p.*, c.name as company_name, u2.username as last_editor_name 
+                       FROM company_pics p 
+                       JOIN companies c ON p.company_id = c.id 
+                       LEFT JOIN users u2 ON p.updated_by = u2.id";
+        
+        if ($show_all || !$user_id) {
+            $stmt = $pdo->prepare($base_query . " ORDER BY p.status ASC, p.name ASC");
+            $stmt->execute();
+        } else {
+            // PIC visibility follows Company visibility
+            $stmt = $pdo->prepare($base_query . "
+                       WHERE c.created_by = ? OR c.assigned_sales_id = ?
+                          OR c.created_by IN (
+                               SELECT DISTINCT tm2.user_id FROM team_members tm1
+                               JOIN team_members tm2 ON tm1.team_id = tm2.team_id
+                               WHERE tm1.user_id = ?
+                          )
+                          OR c.assigned_sales_id IN (
+                               SELECT DISTINCT tm2.user_id FROM team_members tm1
+                               JOIN team_members tm2 ON tm1.team_id = tm2.team_id
+                               WHERE tm1.user_id = ?
+                          )
+                       ORDER BY p.status ASC, p.name ASC");
+            $stmt->execute([$user_id, $user_id, $user_id, $user_id]);
+        }
         $pics = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $pics]);
     } catch (PDOException $e) {

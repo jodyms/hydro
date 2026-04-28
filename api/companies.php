@@ -4,16 +4,38 @@ require 'db.php';
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 if ($action === 'list') {
+    $user_id = $_GET['user_id'] ?? null;
+    $show_all = isset($_GET['show_all']) ? ($_GET['show_all'] === 'true') : true;
+
     try {
-        $stmt = $pdo->prepare("SELECT c.*, r.region_name, i.industry_name, ct.type_name as type, u.username as creator_name, u2.username as last_editor_name 
-                               FROM companies c 
-                               LEFT JOIN regions r ON c.region_id = r.id 
-                               LEFT JOIN industries i ON c.industry_id = i.id 
-                               LEFT JOIN company_types ct ON c.type_id = ct.id
-                               LEFT JOIN users u ON c.created_by = u.id
-                               LEFT JOIN users u2 ON c.updated_by = u2.id
-                               ORDER BY c.name ASC");
-        $stmt->execute();
+        $base_query = "SELECT c.*, r.region_name, i.industry_name, ct.type_name as type, u.username as creator_name, u2.username as last_editor_name 
+                       FROM companies c 
+                       LEFT JOIN regions r ON c.region_id = r.id 
+                       LEFT JOIN industries i ON c.industry_id = i.id 
+                       LEFT JOIN company_types ct ON c.type_id = ct.id
+                       LEFT JOIN users u ON c.created_by = u.id
+                       LEFT JOIN users u2 ON c.updated_by = u2.id";
+        
+        if ($show_all || !$user_id) {
+            $stmt = $pdo->prepare($base_query . " ORDER BY c.name ASC");
+            $stmt->execute();
+        } else {
+            // Filter: Created by me OR assigned to me OR created by/assigned to my teammates
+            $stmt = $pdo->prepare($base_query . "
+                       WHERE c.created_by = ? OR c.assigned_sales_id = ?
+                          OR c.created_by IN (
+                               SELECT DISTINCT tm2.user_id FROM team_members tm1
+                               JOIN team_members tm2 ON tm1.team_id = tm2.team_id
+                               WHERE tm1.user_id = ?
+                          )
+                          OR c.assigned_sales_id IN (
+                               SELECT DISTINCT tm2.user_id FROM team_members tm1
+                               JOIN team_members tm2 ON tm1.team_id = tm2.team_id
+                               WHERE tm1.user_id = ?
+                          )
+                       ORDER BY c.name ASC");
+            $stmt->execute([$user_id, $user_id, $user_id, $user_id]);
+        }
         $companies = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $companies]);
     } catch (PDOException $e) {

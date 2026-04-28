@@ -22,6 +22,108 @@ function logActivity($pdo, $installationId, $companyId, $actionType, $descriptio
     }
 }
 
+function getInstallationAuditSnapshot($pdo, $installationId) {
+    $stmt = $pdo->prepare("SELECT i.*, c.name as company_name, u.username as assigned_to_name
+                           FROM installations i
+                           LEFT JOIN companies c ON i.company_id = c.id
+                           LEFT JOIN users u ON i.assigned_to = u.id
+                           WHERE i.id = ?");
+    $stmt->execute([$installationId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function formatInstallationCycleUnit($unit) {
+    $u = strtolower(trim((string) $unit));
+    if ($u === 'days' || $u === 'day' || $u === 'hari') return 'Hari';
+    if ($u === 'months' || $u === 'month' || $u === 'bulan') return 'Bulan';
+    if ($u === 'years' || $u === 'year' || $u === 'tahun') return 'Tahun';
+    return trim((string) $unit);
+}
+
+function formatAuditValue($value) {
+    return ($value === null || $value === '') ? '-' : $value;
+}
+
+function normalizeInstallationAuditValues($record) {
+    if (!$record) return [];
+
+    $values = [];
+
+    if (array_key_exists('company_name', $record)) $values['company_name'] = formatAuditValue($record['company_name']);
+    if (array_key_exists('product_name', $record)) $values['product_name'] = formatAuditValue($record['product_name']);
+    if (array_key_exists('installation_date', $record)) $values['installation_date'] = formatAuditValue($record['installation_date']);
+    if (array_key_exists('replacement_date', $record)) $values['replacement_date'] = formatAuditValue($record['replacement_date']);
+    if (array_key_exists('visit_schedule_date', $record)) $values['visit_schedule_date'] = formatAuditValue($record['visit_schedule_date']);
+    if (array_key_exists('followup_date', $record)) $values['followup_date'] = formatAuditValue($record['followup_date']);
+    if (array_key_exists('status', $record)) $values['status'] = formatAuditValue($record['status']);
+    if (array_key_exists('notes', $record)) $values['notes'] = formatAuditValue($record['notes']);
+    if (array_key_exists('assigned_to_name', $record)) $values['assigned_to_name'] = formatAuditValue($record['assigned_to_name']);
+    if (array_key_exists('status_active', $record)) $values['status_active'] = (string) ($record['status_active'] ?? '1');
+
+    if (array_key_exists('maintenance_cycle_value', $record) || array_key_exists('maintenance_cycle_unit', $record)) {
+        $cycleValue = $record['maintenance_cycle_value'] ?? null;
+        $cycleUnit = formatInstallationCycleUnit($record['maintenance_cycle_unit'] ?? '');
+        $cycle = trim(($cycleValue ? $cycleValue . ' ' : '') . $cycleUnit);
+        if ($cycle !== '') $values['maintenance_cycle'] = $cycle;
+    }
+
+    return $values;
+}
+
+function filterInstallationAuditValues($values, $keys) {
+    return array_intersect_key($values, array_flip($keys));
+}
+
+function diffInstallationAuditValues($oldRecord, $newRecord, $keys = null) {
+    $oldValues = normalizeInstallationAuditValues($oldRecord);
+    $newValues = normalizeInstallationAuditValues($newRecord);
+
+    if (is_array($keys) && !empty($keys)) {
+        $oldValues = filterInstallationAuditValues($oldValues, $keys);
+        $newValues = filterInstallationAuditValues($newValues, $keys);
+    }
+
+    $allKeys = array_unique(array_merge(array_keys($oldValues), array_keys($newValues)));
+    $changedOld = [];
+    $changedNew = [];
+
+    foreach ($allKeys as $key) {
+        $oldValue = $oldValues[$key] ?? '-';
+        $newValue = $newValues[$key] ?? '-';
+
+        if ((string) $oldValue !== (string) $newValue) {
+            $changedOld[$key] = $oldValue;
+            $changedNew[$key] = $newValue;
+        }
+    }
+
+    return [$changedOld, $changedNew];
+}
+
+function buildStatusChangeAuditValues($oldRecord, $newRecord) {
+    $oldValues = filterInstallationAuditValues(normalizeInstallationAuditValues($oldRecord), ['status', 'notes']);
+    $newValues = filterInstallationAuditValues(normalizeInstallationAuditValues($newRecord), ['status', 'notes']);
+
+    $oldStatus = $oldValues['status'] ?? '-';
+    $newStatus = $newValues['status'] ?? '-';
+
+    if ((string) $oldStatus === (string) $newStatus) {
+        return [[], []];
+    }
+
+    $payloadOld = ['status' => $oldStatus];
+    $payloadNew = ['status' => $newStatus];
+
+    $oldNotes = $oldValues['notes'] ?? '-';
+    $newNotes = $newValues['notes'] ?? '-';
+    if ($oldNotes !== '-' || $newNotes !== '-') {
+        $payloadOld['notes'] = $oldNotes;
+        $payloadNew['notes'] = $newNotes;
+    }
+
+    return [$payloadOld, $payloadNew];
+}
+
 if ($action === 'list') {
     $user_id = $_GET['user_id'] ?? null;
     $show_all = isset($_GET['show_all']) ? $_GET['show_all'] === 'true' : true;
@@ -94,10 +196,14 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user_id  // assigned_to = user yang membuat
             ]);
             $newId = $pdo->lastInsertId();
-            logActivity($pdo, $newId, $company_id, 'CREATE', 
-                'Produk baru ditambahkan: ' . $prod['productName'], 
-                $user_id, null, 
-                ['product_name' => $prod['productName'], 'replacement_date' => $prod['replacementDate'], 'cycle' => ($prod['recurringValue'] ?? '') . ' ' . ($prod['recurringUnit'] ?? '')]
+            $newSnapshot = getInstallationAuditSnapshot($pdo, $newId);
+            logActivity($pdo, $newId, $company_id, 'CREATE',
+                'Produk baru ditambahkan: ' . $prod['productName'],
+                $user_id, null,
+                filterInstallationAuditValues(
+                    normalizeInstallationAuditValues($newSnapshot),
+                    ['company_name', 'product_name', 'installation_date', 'replacement_date', 'maintenance_cycle', 'status', 'assigned_to_name']
+                )
             );
         }
         
@@ -121,10 +227,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     try {
-        // Get old values first
-        $stmtOld = $pdo->prepare("SELECT * FROM installations WHERE id = ?");
-        $stmtOld->execute([$id]);
-        $oldRecord = $stmtOld->fetch();
+        $oldRecord = getInstallationAuditSnapshot($pdo, $id);
         
         $fields = [];
         $params = [];
@@ -136,6 +239,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($data['status'])) { $fields[] = "status = ?"; $params[] = $data['status']; }
         if (isset($data['notes'])) { $fields[] = "notes = ?"; $params[] = $data['notes']; }
         if (isset($data['replacementDate'])) { $fields[] = "replacement_date = ?"; $params[] = $data['replacementDate']; }
+        if (isset($data['followup_date'])) { $fields[] = "followup_date = ?"; $params[] = $data['followup_date']; }
         if (isset($data['visit_schedule_date'])) { $fields[] = "visit_schedule_date = ?"; $params[] = $data['visit_schedule_date']; }
         if (isset($data['is_history'])) { $fields[] = "is_history = ?"; $params[] = $data['is_history']; }
         if (isset($data['assigned_to'])) { $fields[] = "assigned_to = ?"; $params[] = $data['assigned_to']; }
@@ -149,14 +253,30 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         
-        // Log the edit
-        if ($oldRecord) {
-            logActivity($pdo, $id, $oldRecord['company_id'], 'EDIT',
-                'Data diperbarui: ' . ($oldRecord['product_name'] ?? ''),
-                $user_id,
-                ['product_name' => $oldRecord['product_name'], 'status' => $oldRecord['status'], 'replacement_date' => $oldRecord['replacement_date']],
-                $data
-            );
+        $newRecord = getInstallationAuditSnapshot($pdo, $id);
+
+        if ($oldRecord && $newRecord) {
+            [$statusOld, $statusNew] = buildStatusChangeAuditValues($oldRecord, $newRecord);
+            if (!empty($statusNew)) {
+                logActivity($pdo, $id, $newRecord['company_id'], 'STATUS_CHANGE',
+                    'Status diperbarui: ' . ($newRecord['product_name'] ?? $oldRecord['product_name'] ?? ''),
+                    $user_id,
+                    $statusOld,
+                    $statusNew
+                );
+            }
+
+            [$editOld, $editNew] = diffInstallationAuditValues($oldRecord, $newRecord);
+            unset($editOld['status'], $editNew['status']);
+
+            if (!empty($editNew)) {
+                logActivity($pdo, $id, $newRecord['company_id'], 'EDIT',
+                    'Data diperbarui: ' . ($newRecord['product_name'] ?? $oldRecord['product_name'] ?? ''),
+                    $user_id,
+                    $editOld,
+                    $editNew
+                );
+            }
         }
         
         echo json_encode(['status' => 'success', 'message' => 'Data berhasil diperbarui.']);
@@ -227,6 +347,7 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("SELECT * FROM installations WHERE id = ?");
         $stmt->execute([$id]);
         $current = $stmt->fetch();
+        $currentSnapshot = getInstallationAuditSnapshot($pdo, $id);
         
         if (!$current) {
             throw new Exception("Record not found.");
@@ -239,6 +360,7 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $stmtDone = $pdo->prepare("UPDATE installations SET status = 'Done', is_history = 1, notes = ?, updated_by = ? WHERE id = ?");
         $stmtDone->execute([$archive_notes, $user_id, $id]);
+        $doneSnapshot = getInstallationAuditSnapshot($pdo, $id);
         
         // 3. Insert new record — keep assigned_to from old record (ownership stays the same)
         $final_product = $new_product_name ?: $current['product_name'];
@@ -262,13 +384,32 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $keep_assigned_to  // Keep same assigned_to from old record
         ]);
         $newRecordId = $pdo->lastInsertId();
+        $newSnapshot = getInstallationAuditSnapshot($pdo, $newRecordId);
+
+        if ($currentSnapshot && $doneSnapshot) {
+            [$statusOld, $statusNew] = buildStatusChangeAuditValues($currentSnapshot, $doneSnapshot);
+            if (!empty($statusNew)) {
+                logActivity($pdo, $id, $current['company_id'], 'STATUS_CHANGE',
+                    'Status diperbarui: ' . ($current['product_name'] ?? ''),
+                    $user_id,
+                    $statusOld,
+                    $statusNew
+                );
+            }
+        }
         
         // Log both: archive of old + creation of new
         logActivity($pdo, $id, $current['company_id'], 'RENEW',
             'Produk diperpanjang: ' . $current['product_name'] . ' → ' . $final_product,
             $user_id,
-            ['product_name' => $current['product_name'], 'replacement_date' => $current['replacement_date'], 'status' => $current['status']],
-            ['product_name' => $final_product, 'replacement_date' => $next_date, 'new_id' => $newRecordId, 'notes' => $renew_notes]
+            filterInstallationAuditValues(
+                normalizeInstallationAuditValues($currentSnapshot),
+                ['product_name', 'replacement_date', 'maintenance_cycle', 'status']
+            ),
+            filterInstallationAuditValues(
+                normalizeInstallationAuditValues($newSnapshot),
+                ['product_name', 'installation_date', 'replacement_date', 'maintenance_cycle', 'status', 'notes', 'assigned_to_name']
+            )
         );
         
         $pdo->commit();
@@ -301,14 +442,22 @@ if ($action === 'transfer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
         
-        // 1. Update all installations for this company from old user to new user
-        if ($from_user_id) {
-            $stmt = $pdo->prepare("UPDATE installations SET assigned_to = ?, updated_by = ? WHERE company_id = ? AND assigned_to = ?");
-            $stmt->execute([$to_user_id, $assigned_by, $company_id, $from_user_id]);
+        $installation_id = $data['installation_id'] ?? null;
+        
+        if ($installation_id) {
+            // 1. Transfer only ONE specific installation
+            $stmt = $pdo->prepare("UPDATE installations SET assigned_to = ?, updated_by = ? WHERE id = ?");
+            $stmt->execute([$to_user_id, $assigned_by, $installation_id]);
         } else {
-            // If from_user_id is null, transfer ALL unassigned + all for this company
-            $stmt = $pdo->prepare("UPDATE installations SET assigned_to = ?, updated_by = ? WHERE company_id = ?");
-            $stmt->execute([$to_user_id, $assigned_by, $company_id]);
+            // 2. Original behavior: Update all installations for this company from old user to new user
+            if ($from_user_id) {
+                $stmt = $pdo->prepare("UPDATE installations SET assigned_to = ?, updated_by = ? WHERE company_id = ? AND assigned_to = ?");
+                $stmt->execute([$to_user_id, $assigned_by, $company_id, $from_user_id]);
+            } else {
+                // If from_user_id is null, transfer ALL for this company
+                $stmt = $pdo->prepare("UPDATE installations SET assigned_to = ?, updated_by = ? WHERE company_id = ?");
+                $stmt->execute([$to_user_id, $assigned_by, $company_id]);
+            }
         }
         $affected = $stmt->rowCount();
         
@@ -364,6 +513,53 @@ if ($action === 'bulk_assign' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode([
             'status' => 'success', 
             'message' => "Berhasil menjadwalkan {$affected} tugas ke agent.",
+            'affected' => $affected
+        ]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+if ($action === 'bulk_schedule_visit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents("php://input"), true);
+    $installation_ids = $data['installation_ids'] ?? [];
+    $visit_date = $data['visit_date'] ?? null;
+    $user_id = $data['user_id'] ?? null;
+
+    if (empty($installation_ids) || !$visit_date) {
+        echo json_encode(['status' => 'error', 'message' => 'Data instalasi dan tanggal kunjungan wajib diisi.']);
+        exit;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $placeholders = implode(',', array_fill(0, count($installation_ids), '?'));
+
+        $stmtOld = $pdo->prepare("SELECT * FROM installations WHERE id IN ($placeholders)");
+        $stmtOld->execute($installation_ids);
+        $oldRecords = $stmtOld->fetchAll(PDO::FETCH_ASSOC);
+
+        $params = array_merge([$visit_date, $user_id], $installation_ids);
+        $stmt = $pdo->prepare("UPDATE installations SET visit_schedule_date = ?, updated_by = ? WHERE id IN ($placeholders)");
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        foreach ($oldRecords as $old) {
+            logActivity($pdo, $old['id'], $old['company_id'], 'SCHEDULE_VISIT',
+                'Jadwal kunjungan diperbarui: ' . ($old['product_name'] ?? ''),
+                $user_id,
+                ['visit_schedule_date' => $old['visit_schedule_date'] ?? null],
+                ['visit_schedule_date' => $visit_date]
+            );
+        }
+
+        $pdo->commit();
+        echo json_encode([
+            'status' => 'success',
+            'message' => "Berhasil menjadwalkan kunjungan untuk {$affected} item.",
             'affected' => $affected
         ]);
     } catch (Exception $e) {
@@ -433,18 +629,17 @@ if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
         
-        $stmt = $pdo->prepare("UPDATE installations SET product_name = ?, installation_date = ?, replacement_date = ?, maintenance_cycle_value = ?, maintenance_cycle_unit = ?, status = ?, notes = ?, updated_by = ? WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE installations SET product_name = ?, installation_date = ?, replacement_date = ?, followup_date = ?, maintenance_cycle_value = ?, maintenance_cycle_unit = ?, status = ?, notes = ?, updated_by = ? WHERE id = ?");
         
         $updated = 0;
         foreach ($items as $item) {
-            $stmtOld = $pdo->prepare("SELECT * FROM installations WHERE id = ?");
-            $stmtOld->execute([$item['id']]);
-            $old = $stmtOld->fetch(PDO::FETCH_ASSOC);
+            $old = getInstallationAuditSnapshot($pdo, $item['id']);
 
             $stmt->execute([
                 $item['product_name'],
                 $item['installation_date'] ?: null,
                 $item['replacement_date'],
+                $item['followup_date'] ?: null,
                 $item['maintenance_cycle_value'] ?? null,
                 $item['maintenance_cycle_unit'] ?? 'months',
                 $item['status'] ?? 'Scheduled',
@@ -454,13 +649,30 @@ if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $updated++;
 
-            if ($old) {
-                logActivity($pdo, $item['id'], $old['company_id'], 'EDIT',
-                    'Data diperbarui (Bulk): ' . $item['product_name'],
-                    $user_id,
-                    ['product_name' => $old['product_name'], 'status' => $old['status'], 'replacement_date' => $old['replacement_date']],
-                    $item
-                );
+            $new = getInstallationAuditSnapshot($pdo, $item['id']);
+
+            if ($old && $new) {
+                [$statusOld, $statusNew] = buildStatusChangeAuditValues($old, $new);
+                if (!empty($statusNew)) {
+                    logActivity($pdo, $item['id'], $new['company_id'], 'STATUS_CHANGE',
+                        'Status diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
+                        $user_id,
+                        $statusOld,
+                        $statusNew
+                    );
+                }
+
+                [$editOld, $editNew] = diffInstallationAuditValues($old, $new);
+                unset($editOld['status'], $editNew['status']);
+
+                if (!empty($editNew)) {
+                    logActivity($pdo, $item['id'], $new['company_id'], 'EDIT',
+                        'Data diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
+                        $user_id,
+                        $editOld,
+                        $editNew
+                    );
+                }
             }
         }
         

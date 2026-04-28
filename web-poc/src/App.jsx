@@ -1,9 +1,22 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, PlusSquare, PlusCircle, Search, Map, X, Cake, Calendar, Filter, Eye, ChevronLeft, ChevronRight, Archive, User, Shield, Lock, AlertCircle, CheckCircle2, Loader2, LogOut, Settings, Download, Send, Info, Bell, BarChart3, Clock, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, PlusSquare, PlusCircle, Search, Map, X, Cake, Calendar, Filter, Eye, ChevronLeft, ChevronRight, Archive, User, Shield, ShieldCheck, Lock, AlertCircle, CheckCircle2, Loader2, LogOut, Settings, Download, Send, Info, Bell, BarChart3, Clock, MessageSquare } from 'lucide-react';
 // --- Constants (no more dataMock.js) ---
 let STATUS_OPTIONS = ['Reminder Sent', 'Offering Product', 'Scheduled for Replacement', 'Done', 'Skip', 'Follow up'];
 const COMPANY_TYPES = ['Customer', 'Prospek'];
+const ACTIVITY_FIELD_LABELS = {
+  company_name: 'Company',
+  product_name: 'Produk',
+  installation_date: 'Tgl Instalasi',
+  replacement_date: 'Target Ganti',
+  maintenance_cycle: 'Siklus',
+  visit_schedule_date: 'Jadwal Kunjungan',
+  followup_date: 'Tgl Follow Up',
+  status: 'Status',
+  status_active: 'Status Data',
+  notes: 'Catatan',
+  assigned_to_name: 'PIC Sales'
+};
 
 const getLocalDateString = () => {
   const d = new Date();
@@ -32,6 +45,29 @@ const getInitialProduct = () => {
   const d = getLocalDateString();
   return { productName: '', installationDate: d, replacementDate: calculateNextDate(d, '1', 'years'), recurringValue: '1', recurringUnit: 'years' };
 };
+
+const formatActivityFieldLabel = (key) => ACTIVITY_FIELD_LABELS[key] || key.replace(/_/g, ' ');
+
+const formatActivityFieldValue = (key, value) => {
+  if (value === null || value === undefined || value === '') return '-';
+  if (key === 'status_active') return String(value) === '1' ? 'Aktif' : 'Non-Aktif';
+  return String(value);
+};
+
+const parseActivityPayload = (raw) => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    return Object.entries(parsed).map(([key, value]) => ({
+      key,
+      label: formatActivityFieldLabel(key),
+      value: formatActivityFieldValue(key, value)
+    }));
+  } catch (e) {
+    return [];
+  }
+};
 import Login from './pages/Login';
 
 // --- Shared Components ---
@@ -47,36 +83,36 @@ function Header({ user, setUser }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogout = () => {
-     localStorage.removeItem('auth_user');
-     localStorage.removeItem('auth_token');
-     setUser(null);
-     navigate('/login');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    setUser(null);
+    navigate('/login');
   };
 
   const handleSaveProfile = async (e) => {
-      e.preventDefault();
-      setIsLoading(true);
-      setStatusMsg(null);
-      try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=update_profile`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(formData)
-          });
-          const json = await res.json();
-          if (json.status === 'success') {
-              setStatusMsg(json.message);
-              localStorage.setItem('auth_user', JSON.stringify(json.user));
-              setUser(json.user);
-              setTimeout(() => { setModalOpen(false); setStatusMsg(null); }, 1500);
-          } else {
-              setStatusMsg(json.message);
-          }
-      } catch (err) {
-          setStatusMsg("Gagal menghubungi server.");
-      } finally {
-          setIsLoading(false);
+    e.preventDefault();
+    setIsLoading(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=update_profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        setStatusMsg(json.message);
+        localStorage.setItem('auth_user', JSON.stringify(json.user));
+        setUser(json.user);
+        setTimeout(() => { setModalOpen(false); setStatusMsg(null); }, 1500);
+      } else {
+        setStatusMsg(json.message);
       }
+    } catch (err) {
+      setStatusMsg("Gagal menghubungi server.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -87,20 +123,20 @@ function Header({ user, setUser }) {
         </div>
         <div className="user-profile" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => setDropdownOpen(!dropdownOpen)}>
           <span className="user-role">{currentUser.role_name}</span>
-          <div className="avatar" style={{ background: '#0ea5e9' }}>{currentUser.username.substring(0,2).toUpperCase()}</div>
-          
+          <div className="avatar" style={{ background: '#0ea5e9' }}>{currentUser.username.substring(0, 2).toUpperCase()}</div>
+
           {dropdownOpen && (
             <div style={{ position: 'absolute', top: '45px', right: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', zIndex: 50, width: '200px', overflow: 'hidden' }}>
-               <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{currentUser.username}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>{currentUser.email}</div>
-               </div>
-               <div className="dropdown-item" onClick={() => setModalOpen(true)} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#334155' }} onMouseOver={e=>e.currentTarget.style.background='#f8fafc'} onMouseOut={e=>e.currentTarget.style.background='white'}>
-                  <Settings size={16} /> Pengaturan Profil
-               </div>
-               <div className="dropdown-item" onClick={handleLogout} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#dc2626', borderTop: '1px solid #f1f5f9' }} onMouseOver={e=>e.currentTarget.style.background='#fef2f2'} onMouseOut={e=>e.currentTarget.style.background='white'}>
-                  <LogOut size={16} /> Keluar (Logout)
-               </div>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{currentUser.username}</div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>{currentUser.email}</div>
+              </div>
+              <div className="dropdown-item" onClick={() => setModalOpen(true)} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#334155' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                <Settings size={16} /> Pengaturan Profil
+              </div>
+              <div className="dropdown-item" onClick={handleLogout} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#dc2626', borderTop: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#fef2f2'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                <LogOut size={16} /> Keluar (Logout)
+              </div>
             </div>
           )}
         </div>
@@ -108,7 +144,7 @@ function Header({ user, setUser }) {
 
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal-content" style={{maxWidth: '450px'}} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Pengaturan Profil Akun</h2>
               <button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button>
@@ -117,17 +153,17 @@ function Header({ user, setUser }) {
               <div className="modal-body">
                 <div className="form-group">
                   <label>Email Baru</label>
-                  <input required className="form-control" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  <input required className="form-control" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label>Nomor Telepon</label>
-                  <input className="form-control" type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="081234xxx" />
+                  <input className="form-control" type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="081234xxx" />
                 </div>
                 <div className="form-group">
                   <label>Ubah Kata Sandi</label>
-                  <input className="form-control" type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Kosongkan jika tidak ingin diubah" />
+                  <input className="form-control" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Kosongkan jika tidak ingin diubah" />
                 </div>
-                {statusMsg && <div style={{marginTop: '12px', color: '#059669', fontSize: '14px', background: '#ecfdf5', padding: '8px', borderRadius: '4px'}}>{statusMsg}</div>}
+                {statusMsg && <div style={{ marginTop: '12px', color: '#059669', fontSize: '14px', background: '#ecfdf5', padding: '8px', borderRadius: '4px' }}>{statusMsg}</div>}
               </div>
               <div className="modal-footer">
                 <button type="submit" className="btn btn-primary" disabled={isLoading}>{isLoading ? 'Menyimpan...' : 'Simpan Profil'}</button>
@@ -168,9 +204,9 @@ function Sidebar({ permissions, user }) {
 
   return (
     <div className="sidebar">
-      <div className="sidebar-header" style={{ 
-        padding: '20px', 
-        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', 
+      <div className="sidebar-header" style={{
+        padding: '20px',
+        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
         borderBottom: 'none',
         justifyContent: 'center',
         height: '70px'
@@ -179,20 +215,20 @@ function Sidebar({ permissions, user }) {
       </div>
       <nav className="sidebar-nav">
         {filteredItems.map((item, index) => {
-           if (item.type === 'header') {
-              const nextItems = filteredItems.slice(index + 1);
-              const hasContent = nextItems.length > 0 && nextItems[0].type !== 'header';
-              if (!hasContent) return null;
-              return <div key={index} className="nav-section">{item.label}</div>;
-           }
-           const Icon = item.icon;
-           const isActive = location.pathname === item.path;
-           return (
-             <Link key={index} to={item.path} className={`nav-link ${isActive ? 'active' : ''}`}>
-               <Icon size={20} />
-               <span>{item.label}</span>
-             </Link>
-           );
+          if (item.type === 'header') {
+            const nextItems = filteredItems.slice(index + 1);
+            const hasContent = nextItems.length > 0 && nextItems[0].type !== 'header';
+            if (!hasContent) return null;
+            return <div key={index} className="nav-section">{item.label}</div>;
+          }
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
+          return (
+            <Link key={index} to={item.path} className={`nav-link ${isActive ? 'active' : ''}`}>
+              <Icon size={20} />
+              <span>{item.label}</span>
+            </Link>
+          );
         })}
       </nav>
     </div>
@@ -212,17 +248,17 @@ function DataTable({ data, columns, fileName = 'export-data' }) {
     let list = [...data];
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
-      list = list.filter(row => columns.some(col => 
+      list = list.filter(row => columns.some(col =>
         col.accessor && String(row[col.accessor] || '').toLowerCase().includes(q)
       ));
     }
     if (sortField) {
-      list.sort((a,b) => {
+      list.sort((a, b) => {
         let va = a[sortField] ?? '', vb = b[sortField] ?? '';
-        if(typeof va==='string') va=va.toLowerCase();
-        if(typeof vb==='string') vb=vb.toLowerCase();
-        if(va<vb) return sortDir==='asc'?-1:1;
-        if(va>vb) return sortDir==='asc'?1:-1;
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return sortDir === 'asc' ? 1 : -1;
         return 0;
       });
     }
@@ -234,7 +270,7 @@ function DataTable({ data, columns, fileName = 'export-data' }) {
   const exportToCSV = () => {
     const visibleCols = columns.filter(c => c.accessor);
     const headers = visibleCols.map(c => c.header).join(',');
-    const rows = filtered.map(row => 
+    const rows = filtered.map(row =>
       visibleCols.map(c => `"${String(row[c.accessor] || '').replace(/"/g, '""')}"`).join(',')
     ).join('\n');
     const blob = new Blob([`${headers}\n${rows}`], { type: 'text/csv' });
@@ -261,11 +297,11 @@ function DataTable({ data, columns, fileName = 'export-data' }) {
           <thead>
             <tr>
               {columns.map((col, idx) => (
-                <th key={idx} 
-                    style={{ cursor: col.accessor ? 'pointer' : 'default' }} 
-                    onClick={() => col.accessor && (sortField === col.accessor ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : (setSortField(col.accessor), setSortDir('asc')))}>
+                <th key={idx}
+                  style={{ cursor: col.accessor ? 'pointer' : 'default' }}
+                  onClick={() => col.accessor && (sortField === col.accessor ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : (setSortField(col.accessor), setSortDir('asc')))}>
                   {col.header}
-                  {col.accessor && sortField === col.accessor && (sortDir === 'asc' ? ' â–²' : ' â–¼')}
+                  {col.accessor && sortField === col.accessor && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                 </th>
               ))}
             </tr>
@@ -293,10 +329,10 @@ function Pagination({ totalItems, itemsPerPage, currentPage, onPageChange }) {
   if (totalPages <= 1) return null;
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '16px', padding: '16px', borderTop: '1px solid var(--border)' }}>
-      <button 
-        className="btn btn-secondary" 
-        style={{ padding: '8px', borderRadius: '50%' }} 
-        disabled={currentPage === 1} 
+      <button
+        className="btn btn-secondary"
+        style={{ padding: '8px', borderRadius: '50%' }}
+        disabled={currentPage === 1}
         onClick={() => onPageChange(currentPage - 1)}
       >
         <ChevronLeft size={18} />
@@ -304,10 +340,10 @@ function Pagination({ totalItems, itemsPerPage, currentPage, onPageChange }) {
       <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-muted)' }}>
         Halaman {currentPage} dari {totalPages}
       </span>
-      <button 
-        className="btn btn-secondary" 
-        style={{ padding: '8px', borderRadius: '50%' }} 
-        disabled={currentPage === totalPages} 
+      <button
+        className="btn btn-secondary"
+        style={{ padding: '8px', borderRadius: '50%' }}
+        disabled={currentPage === totalPages}
         onClick={() => onPageChange(currentPage + 1)}
       >
         <ChevronRight size={18} />
@@ -320,7 +356,7 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState([]);
   const MODAL_ITEMS_PER_PAGE = 5;
-  
+
   if (!company) return null;
 
   const currentItems = items.slice((currentPage - 1) * MODAL_ITEMS_PER_PAGE, currentPage * MODAL_ITEMS_PER_PAGE);
@@ -336,9 +372,9 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
   const toggleSelect = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
-  
+
   const getBadgeClass = (status) => {
-    switch(status) {
+    switch (status) {
       case 'Done': return 'badge-success';
       case 'Reminder Sent': return 'badge-info';
       case 'Offering Product': return 'badge-info';
@@ -353,119 +389,119 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
       <div className="modal-content" style={{ maxWidth: '1200px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
           <div>
-             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {company.name} 
-                <span className={`badge ${company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{company.type}</span>
-             </h2>
-             <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-               <MapPin size={14} style={{ display: 'inline', verticalAlign: 'middle' }}/> {company.address} ({company.region})
-             </div>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {company.name}
+              <span className={`badge ${company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{company.type}</span>
+            </h2>
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+              <MapPin size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> {company.address} ({company.region})
+            </div>
           </div>
           <button className="btn btn-secondary" onClick={onClose} style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-             <X size={18} /> Tutup
+            <X size={18} /> Tutup
           </button>
         </div>
         <div className="modal-body" style={{ overflowY: 'auto', flex: 1, paddingRight: '12px' }}>
-           <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: '#0369a1' }}>{title} ({items.length} Item)</h3>
-           <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-             <table className="data-table">
-               <thead>
-                 <tr>
-                   {onBulkRenew && (
-                     <th style={{ width: '40px' }}>
-                       <input type="checkbox" checked={items.length > 0 && selectedIds.length === items.length} onChange={toggleSelectAll} />
-                     </th>
-                   )}
-                   <th>Nama Produk</th>
-                   <th>Tgl Pasang</th>
-                   <th>Target Ganti/Offer</th>
-                   <th>Status Transaksi</th>
-                   {showWorkOrderFields && <th>Update Status</th>}
-                   {showWorkOrderFields && <th>Follow Up Note</th>}
-                   {renderAction && <th>Aksi</th>}
-                 </tr>
-               </thead>
-               <tbody>
-                 {currentItems.map(item => {
-                    const isSelected = selectedIds.includes(item.id);
-                    const diffDays = Math.ceil((new Date(item.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-                    return (
-                      <tr key={item.id} style={isSelected ? { backgroundColor: '#f0f9ff' } : {}}>
-                        {onBulkRenew && (
-                          <td>
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)} />
-                          </td>
-                        )}
-                        <td style={{ fontWeight: 600 }}>{item.product_name}</td>
-                        <td style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{item.installation_date || '-'}</td>
-                        {showWorkOrderFields ? (
-                          <td>
-                            <input type="date" className="form-control" style={{ padding: '6px', width: '130px', borderColor: item.status === 'Follow up' ? '#0ea5e9' : 'var(--border)' }} value={item.replacement_date} onChange={(e) => updateDate(item.id, e.target.value)} title="Ubah jadwal jika diundur" />
-                            <div style={{ marginTop: '4px', fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
-                              {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
-                            </div>
-                          </td>
-                        ) : (
-                          <td>
-                            <div>{item.replacement_date}</div>
-                            <div style={{ fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
-                              {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
-                            </div>
-                          </td>
-                        )}
-                        
-                        {showWorkOrderFields ? (
-                          <td>
-                            <div style={{ marginBottom: '8px' }}><span className={`badge ${getBadgeClass(item.status)}`}>{item.status}</span></div>
-                          </td>
-                        ) : (
-                          <td><span className={`badge ${getBadgeClass(item.status)}`}>{item.status}</span></td>
-                        )}
+          <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: '#0369a1' }}>{title} ({items.length} Item)</h3>
+          <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {onBulkRenew && (
+                    <th style={{ width: '40px' }}>
+                      <input type="checkbox" checked={items.length > 0 && selectedIds.length === items.length} onChange={toggleSelectAll} />
+                    </th>
+                  )}
+                  <th>Nama Produk</th>
+                  <th>Tgl Pasang</th>
+                  <th>Target Ganti/Offer</th>
+                  <th>Status Transaksi</th>
+                  {showWorkOrderFields && <th>Update Status</th>}
+                  {showWorkOrderFields && <th>Follow Up Note</th>}
+                  {renderAction && <th>Aksi</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.map(item => {
+                  const isSelected = selectedIds.includes(item.id);
+                  const diffDays = Math.ceil((new Date(item.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <tr key={item.id} style={isSelected ? { backgroundColor: '#f0f9ff' } : {}}>
+                      {onBulkRenew && (
+                        <td>
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)} />
+                        </td>
+                      )}
+                      <td style={{ fontWeight: 600 }}>{item.product_name}</td>
+                      <td style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{item.installation_date || '-'}</td>
+                      {showWorkOrderFields ? (
+                        <td>
+                          <input type="date" className="form-control" style={{ padding: '6px', width: '130px', borderColor: item.status === 'Follow up' ? '#0ea5e9' : 'var(--border)' }} value={item.replacement_date} onChange={(e) => updateDate(item.id, e.target.value)} title="Ubah jadwal jika diundur" />
+                          <div style={{ marginTop: '4px', fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
+                            {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
+                          </div>
+                        </td>
+                      ) : (
+                        <td>
+                          <div>{item.replacement_date}</div>
+                          <div style={{ fontSize: '0.75rem', color: diffDays <= 7 ? '#ef4444' : '#64748b', fontWeight: 'bold' }}>
+                            {diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}
+                          </div>
+                        </td>
+                      )}
 
-                        {showWorkOrderFields && (
-                          <td style={{ width: '160px' }}>
-                             <select className="form-control" style={{ width: '100%', padding: '6px', fontSize: '0.75rem' }} value={item.status} onChange={(e) => updateStatus(item.id, e.target.value)}>
-                               {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
-                             </select>
-                          </td>
-                        )}
-                        
-                        {showWorkOrderFields && (
-                          <td>
-                             <textarea 
-                               className="form-control" 
-                               style={{ width: '200px', height: '60px', padding: '6px', resize: 'vertical', fontSize: '0.75rem' }} 
-                               value={item.notes || ''} 
-                               placeholder="Catatan..." 
-                               onChange={(e) => updateNotes(item.id, e.target.value)} 
-                               onBlur={(e) => updateNotes(item.id, e.target.value)} 
-                             />
-                          </td>
-                        )}
+                      {showWorkOrderFields ? (
+                        <td>
+                          <div style={{ marginBottom: '8px' }}><span className={`badge ${getBadgeClass(item.status)}`}>{item.status}</span></div>
+                        </td>
+                      ) : (
+                        <td><span className={`badge ${getBadgeClass(item.status)}`}>{item.status}</span></td>
+                      )}
 
-                        {renderAction && <td>{renderAction(item)}</td>}
-                      </tr>
-                    );
-                 })}
-               </tbody>
-             </table>
-           </div>
-           {items.length > MODAL_ITEMS_PER_PAGE && (
-              <Pagination totalItems={items.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
-           )}
+                      {showWorkOrderFields && (
+                        <td style={{ width: '160px' }}>
+                          <select className="form-control" style={{ width: '100%', padding: '6px', fontSize: '0.75rem' }} value={item.status} onChange={(e) => updateStatus(item.id, e.target.value)}>
+                            {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
+                          </select>
+                        </td>
+                      )}
+
+                      {showWorkOrderFields && (
+                        <td>
+                          <textarea
+                            className="form-control"
+                            style={{ width: '200px', height: '60px', padding: '6px', resize: 'vertical', fontSize: '0.75rem' }}
+                            value={item.notes || ''}
+                            placeholder="Catatan..."
+                            onChange={(e) => updateNotes(item.id, e.target.value)}
+                            onBlur={(e) => updateNotes(item.id, e.target.value)}
+                          />
+                        </td>
+                      )}
+
+                      {renderAction && <td>{renderAction(item)}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {items.length > MODAL_ITEMS_PER_PAGE && (
+            <Pagination totalItems={items.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
+          )}
         </div>
         <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-           {onBulkRenew && (
-              <button 
-                className="btn btn-primary" 
-                style={{ background: selectedIds.length > 0 ? '#10b981' : '#94a3b8', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed' }} 
-                onClick={() => selectedIds.length > 0 && onBulkRenew(selectedIds)}
-                disabled={selectedIds.length === 0}
-              >
-                ðŸ”„ Perpanjang Item Terpilih ({selectedIds.length})
-              </button>
-           )}
-           <button className="btn btn-primary" onClick={onClose}>Selesai & Tutup Jendela</button>
+          {onBulkRenew && (
+            <button
+              className="btn btn-primary"
+              style={{ background: selectedIds.length > 0 ? '#10b981' : '#94a3b8', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed' }}
+              onClick={() => selectedIds.length > 0 && onBulkRenew(selectedIds)}
+              disabled={selectedIds.length === 0}
+            >
+              🔄 Perpanjang Item Terpilih ({selectedIds.length})
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={onClose}>Selesai & Tutup Jendela</button>
         </div>
       </div>
     </div>
@@ -473,7 +509,7 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
 }
 
 // --- Transfer Modal (Shared by InstallationPage & WorkOrderPage) ---
-function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fromUserName, currentUser, onTransferDone }) {
+function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fromUserName, currentUser, onTransferDone, installationId }) {
   const [allUsers, setAllUsers] = useState([]);
   const [toUserId, setToUserId] = useState('');
   const [reason, setReason] = useState('');
@@ -491,22 +527,28 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
         .then(r => r.json())
         .then(j => { if (j.status === 'success') setAllUsers(j.data.filter(u => u.status === 'active')); })
         .catch(console.error);
-      // Count affected installations
-      fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=&show_all=true`)
-        .then(r => r.json())
-        .then(j => {
-          if (j.status === 'success') {
-            const count = j.data.filter(i => 
-              String(i.company_id) === String(companyId) && 
-              (!fromUserId || String(i.assigned_to) === String(fromUserId)) &&
-              !Number(i.is_history)
-            ).length;
-            setAffectedCount(count);
-          }
-        })
-        .catch(console.error);
+
+      if (installationId) {
+        setAffectedCount(1);
+      } else {
+        // Count affected installations - Sync with user permissions to avoid 16 vs 7 discrepancy
+        const showAll = currentUser?.permissions?.includes('workorder_showall') || currentUser?.role_name === 'Super Admin';
+        fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`)
+          .then(r => r.json())
+          .then(j => {
+            if (j.status === 'success') {
+              const count = j.data.filter(i =>
+                String(i.company_id) === String(companyId) &&
+                (!fromUserId || String(i.assigned_to) === String(fromUserId)) &&
+                (!i.is_history && Number(i.is_history) !== 1)
+              ).length;
+              setAffectedCount(count);
+            }
+          })
+          .catch(console.error);
+      }
     }
-  }, [isOpen, companyId, fromUserId]);
+  }, [isOpen, companyId, fromUserId, installationId, currentUser]);
 
   if (!isOpen) return null;
 
@@ -521,6 +563,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company_id: companyId,
+          installation_id: installationId || null,
           from_user_id: fromUserId || null,
           to_user_id: toUserId,
           reason: reason,
@@ -529,13 +572,13 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       });
       const d = await res.json();
       if (d.status === 'success') {
-        setStatusMsg(`âœ… ${d.message}`);
+        setStatusMsg(`✅ ${d.message}`);
         setTimeout(() => { onTransferDone(); onClose(); }, 1500);
       } else {
-        setStatusMsg(`âŒ ${d.message}`);
+        setStatusMsg(`❌ ${d.message}`);
       }
     } catch (e) {
-      setStatusMsg('âŒ Gagal menghubungi server.');
+      setStatusMsg('❌ Gagal menghubungi server.');
       console.error(e);
     } finally { setIsSaving(false); }
   };
@@ -547,8 +590,8 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       <div className="modal-content" style={{ maxWidth: '520px', width: '100%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
           <div>
-            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>ðŸ”€ Transfer Instalasi</h2>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Pindahkan semua data instalasi per company</div>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>🔄 Transfer {installationId ? 'Produk' : 'Instalasi'}</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>{installationId ? 'Pindahkan data produk terpilih ke user lain' : 'Pindahkan semua data instalasi per company'}</div>
           </div>
           <button className="close-btn" onClick={onClose}><X size={24} /></button>
         </div>
@@ -561,7 +604,11 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
                 <span style={{ fontWeight: 700, color: '#92400e', fontSize: '0.85rem' }}>Perhatian</span>
               </div>
               <div style={{ fontSize: '0.8rem', color: '#78350f' }}>
-                Semua instalasi untuk company <strong>{companyName}</strong> yang di-assign ke <strong>{fromUserName || 'Semua User'}</strong> akan dipindahkan. Total: <strong>{affectedCount} record</strong> (termasuk aktif & history).
+                {installationId ? (
+                  <>Produk terpilih untuk company <strong>{companyName}</strong> akan dipindahkan.</>
+                ) : (
+                  <>Semua instalasi untuk company <strong>{companyName}</strong> yang di-assign ke <strong>{fromUserName || 'Semua User'}</strong> akan dipindahkan. Total: <strong>{affectedCount} record</strong> aktif.</>
+                )}
               </div>
             </div>
 
@@ -571,7 +618,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
                 <div style={{ fontSize: '0.7rem', color: '#991b1b', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>Dari</div>
                 <div style={{ fontWeight: 600, color: '#dc2626', fontSize: '0.9rem' }}>{fromUserName || '-'}</div>
               </div>
-              <div style={{ textAlign: 'center', fontSize: '1.2rem' }}>âžœ</div>
+              <div style={{ textAlign: 'center', fontSize: '1.2rem' }}>➡</div>
               <div style={{ background: '#dcfce7', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.7rem', color: '#166534', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>Ke</div>
                 <div style={{ fontWeight: 600, color: '#16a34a', fontSize: '0.9rem' }}>{selectedUser?.username || '(Pilih user)'}</div>
@@ -596,7 +643,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
             </div>
 
             {statusMsg && (
-              <div style={{ marginTop: '14px', padding: '10px', borderRadius: '8px', background: statusMsg.startsWith('âœ…') ? '#ecfdf5' : '#fef2f2', color: statusMsg.startsWith('âœ…') ? '#059669' : '#dc2626', fontSize: '0.85rem', fontWeight: 500, border: `1px solid ${statusMsg.startsWith('âœ…') ? '#86efac' : '#fecaca'}` }}>
+              <div style={{ marginTop: '14px', padding: '10px', borderRadius: '8px', background: statusMsg.startsWith('✅') ? '#ecfdf5' : '#fef2f2', color: statusMsg.startsWith('✅') ? '#059669' : '#dc2626', fontSize: '0.85rem', fontWeight: 500, border: `1px solid ${statusMsg.startsWith('✅') ? '#86efac' : '#fecaca'}` }}>
                 {statusMsg}
               </div>
             )}
@@ -604,7 +651,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
           <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Batal</button>
             <button type="submit" className="btn btn-primary" disabled={isSaving || !toUserId} style={{ background: '#f59e0b', minWidth: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              {isSaving ? <><Loader2 size={16} className="spin" /> Memproses...</> : 'ðŸ”€ Transfer Sekarang'}
+              {isSaving ? <><Loader2 size={16} className="spin" /> Memproses...</> : '🔄 Transfer Sekarang'}
             </button>
           </div>
         </form>
@@ -633,10 +680,10 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
       const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
       return { ...inst, comp, diffDays };
     }).filter(i => {
-      if (!i.comp) return false; 
+      if (!i.comp) return false;
       if (i.status === 'Done' || i.is_history) return false;
-      if (i.diffDays > parseInt(filterDays)) return false; 
-      if (filterRegion && i.comp.region_id?.toString() !== filterRegion) return false;
+      if (i.diffDays > parseInt(filterDays)) return false;
+      if (filterRegion && i.comp.region_name !== filterRegion) return false;
       if (filterType && i.comp.type !== filterType) return false;
       if (search && !i.comp.name.toLowerCase().includes(search.toLowerCase()) && !i.product_name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -651,10 +698,10 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
       if (i.diffDays < groups[i.company_id].minDiffDays) groups[i.company_id].minDiffDays = i.diffDays;
     });
 
-    return Object.values(groups).sort((a,b) => a.minDiffDays - b.minDiffDays);
+    return Object.values(groups).sort((a, b) => a.minDiffDays - b.minDiffDays);
   }, [installations, companies, search, filterRegion, filterType, filterDays]);
 
-  if (!can('dashboard_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>dashboard_read</code> untuk melihat ringkasan ini.</p></div>;
+  if (!can('dashboard_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>dashboard_read</code> untuk melihat ringkasan ini.</p></div>;
 
   const currentData = groupedUpcoming.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -673,23 +720,23 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
           <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.9rem' }}>Selamat datang kembali! Berikut ringkasan performa hari ini.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', background: 'white', padding: '6px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-           <button className={`btn ${filterDays === '30' ? 'btn-primary' : ''}`} style={filterDays === '30' ? { padding: '8px 16px', fontSize: '0.8rem' } : { background: 'transparent', color: '#64748b', boxShadow: 'none', padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setFilterDays('30')}>30 Hari</button>
-           <button className={`btn ${filterDays === '90' ? 'btn-primary' : ''}`} style={filterDays === '90' ? { padding: '8px 16px', fontSize: '0.8rem' } : { background: 'transparent', color: '#64748b', boxShadow: 'none', padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setFilterDays('90')}>3 Bulan</button>
+          <button className={`btn ${filterDays === '30' ? 'btn-primary' : ''}`} style={filterDays === '30' ? { padding: '8px 16px', fontSize: '0.8rem' } : { background: 'transparent', color: '#64748b', boxShadow: 'none', padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setFilterDays('30')}>30 Hari</button>
+          <button className={`btn ${filterDays === '90' ? 'btn-primary' : ''}`} style={filterDays === '90' ? { padding: '8px 16px', fontSize: '0.8rem' } : { background: 'transparent', color: '#64748b', boxShadow: 'none', padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setFilterDays('90')}>3 Bulan</button>
         </div>
       </div>
 
       {systemNotice && (
         <div style={{ background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '1px solid #fde68a', color: '#92400e', padding: '16px 20px', borderRadius: '16px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(251, 191, 36, 0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-             <div style={{ background: '#fef3c7', padding: '8px', borderRadius: '10px' }}><Bell size={20} className="shake" /></div>
-             <span><strong>Notifikasi:</strong> {systemNotice}</span>
+            <div style={{ background: '#fef3c7', padding: '8px', borderRadius: '10px' }}><Bell size={20} className="shake" /></div>
+            <span><strong>Notifikasi:</strong> {systemNotice}</span>
           </div>
           <button onClick={() => setSystemNotice(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#92400e', padding: '8px' }}>
             <X size={20} />
           </button>
         </div>
       )}
-      
+
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
         <div className="stat-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', display: 'flex', gap: '16px', alignItems: 'center', transition: 'all 0.3s ease', cursor: 'default' }}>
           <div style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', color: '#2563eb', padding: '16px', borderRadius: '16px' }}><Database size={28} /></div>
@@ -740,19 +787,19 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
             </select>
             <select className="form-control" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
               <option value="">Semua Wilayah</option>
-              {regions.filter(r => (r.status || 'active') === 'active').map(r => <option key={r.id} value={r.id}>{r.region_name}</option>)}
+              {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
             </select>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f9ff', padding: '0 12px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
-               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>Urutan Jadwal:</span>
-               <select className="form-control" style={{ border: 'none', background: 'transparent', width: '150px', cursor: 'pointer' }} value={filterDays} onChange={e => setFilterDays(e.target.value)}>
-                  <option value="7">H - 7 Hari</option>
-                  <option value="14">H - 14 Hari</option>
-                  <option value="30">H - 30 Hari</option>
-                  <option value="60">H - 60 Hari</option>
-                  <option value="90">H - 90 Hari (3 Bulan)</option>
-                  <option value="180">H - 180 Hari (6 Bulan)</option>
-                  <option value="999">Tampilkan Semua (H- & H+)</option>
-               </select>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>Urutan Jadwal:</span>
+              <select className="form-control" style={{ border: 'none', background: 'transparent', width: '150px', cursor: 'pointer' }} value={filterDays} onChange={e => setFilterDays(e.target.value)}>
+                <option value="7">H - 7 Hari</option>
+                <option value="14">H - 14 Hari</option>
+                <option value="30">H - 30 Hari</option>
+                <option value="60">H - 60 Hari</option>
+                <option value="90">H - 90 Hari (3 Bulan)</option>
+                <option value="180">H - 180 Hari (6 Bulan)</option>
+                <option value="999">Tampilkan Semua (H- & H+)</option>
+              </select>
             </div>
           </div>
         </div>
@@ -775,18 +822,18 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                 if (!group.company) return null;
                 return (
                   <tr key={group.company.id || idx} style={{ borderLeft: group.minDiffDays <= 7 ? '4px solid #ef4444' : group.minDiffDays <= 14 ? '4px solid #f59e0b' : '4px solid transparent' }}>
-                     <td style={{ fontWeight: 600 }}>{group.company.name}</td>
-                     <td><span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{group.company.type}</span></td>
-                     <td>{group.company.region_name || '-'}</td>
-                     <td style={{ fontWeight: 'bold' }}>{group.items.length} Item</td>
-                     <td style={{ color: group.minDiffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 'bold' }}>
-                       {group.minDiffDays < 0 ? `Terlewat ${Math.abs(group.minDiffDays)} hari!` : group.minDiffDays === 0 ? 'HARI INI!' : `H - ${group.minDiffDays}`}
-                     </td>
-                     <td>
-                        <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.875rem' }} onClick={() => setModalCompany(group)}>
-                          <Eye size={16} /> Lihat Detail Produk
-                        </button>
-                     </td>
+                    <td style={{ fontWeight: 600 }}>{group.company.name}</td>
+                    <td><span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`}>{group.company.type}</span></td>
+                    <td>{group.company.region_name || '-'}</td>
+                    <td style={{ fontWeight: 'bold' }}>{group.items.length} Item</td>
+                    <td style={{ color: group.minDiffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 'bold' }}>
+                      {group.minDiffDays < 0 ? `Terlewat ${Math.abs(group.minDiffDays)} hari!` : group.minDiffDays === 0 ? 'HARI INI!' : `H - ${group.minDiffDays}`}
+                    </td>
+                    <td>
+                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.875rem' }} onClick={() => setModalCompany(group)}>
+                        <Eye size={16} /> Lihat Detail Produk
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -795,81 +842,81 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
         </div>
         <Pagination totalItems={groupedUpcoming.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
-      
+
       {modalCompany && (
         <CompanyProductsModal
-           company={modalCompany.company}
-           title="Detail Target Follow-up / Penggantian"
-           items={modalCompany.items}
-           onClose={() => setModalCompany(null)}
+          company={modalCompany.company}
+          title="Detail Target Follow-up / Penggantian"
+          items={modalCompany.items}
+          onClose={() => setModalCompany(null)}
         />
       )}
-      
-        {/* Sidebar: Birthdays & Quick Stats */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-           
-           {/* Birthdays Card */}
-           <div className="card-view" style={{ margin: 0, borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <div className="card-header" style={{ background: 'linear-gradient(to right, #fdf4ff, #fae8ff)', padding: '20px', borderBottom: '1px solid #f5d0fe' }}>
-                <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#86198f', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Cake size={20} /> Ultah PIC Bulan Ini
-                </h2>
-              </div>
-              <div style={{ padding: '20px' }}>
-                 {birthdaysThisMonth.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
-                      <p style={{ margin: 0, fontSize: '0.9rem' }}>Tidak ada ulang tahun di bulan ini.</p>
-                    </div>
-                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                       {birthdaysThisMonth.map(p => (
-                         <div key={p.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#fdf4ff', borderRadius: '16px', border: '1px solid #f5d0fe' }}>
-                            <div style={{ background: 'white', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c026d3', fontWeight: 800 }}>
-                              {p.dob.split('-')[2]}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                               <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#4a044e' }}>{p.name}</div>
-                               <div style={{ fontSize: '0.75rem', color: '#a21caf' }}>{p.company_name || 'Klien'}</div>
-                            </div>
-                            <a href={`https://wa.me/${p.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: 'white', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center' }}>
-                               <MessageSquare size={16} />
-                            </a>
-                         </div>
-                       ))}
-                    </div>
-                 )}
-              </div>
-           </div>
 
-           {/* Quick Analytics Summary */}
-           <div className="card-view" style={{ margin: 0, borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <div className="card-header" style={{ background: '#f8fafc', padding: '20px', borderBottom: '1px solid #e2e8f0' }}>
-                <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <BarChart3 size={20} /> Sebaran Status
-                </h2>
-              </div>
-              <div style={{ padding: '20px' }}>
-                 {STATUS_OPTIONS.map(status => {
-                    const count = installations.filter(i => i.status === status && !Number(i.is_history)).length;
-                    const totalActive = installations.filter(i => !Number(i.is_history)).length || 1;
-                    const pct = (count / totalActive) * 100;
-                    return (
-                      <div key={status} style={{ marginBottom: '16px' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
-                            <span>{status}</span>
-                            <span>{count}</span>
-                         </div>
-                         <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: status === 'Done' ? '#10b981' : status === 'Scheduled' ? '#3b82f6' : '#94a3b8', borderRadius: '4px' }} />
-                         </div>
-                      </div>
-                    );
-                 })}
-              </div>
-           </div>
+      {/* Sidebar: Birthdays & Quick Stats */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '24px' }}>
 
+        {/* Birthdays Card */}
+        <div className="card-view" style={{ margin: 0, borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="card-header" style={{ background: 'linear-gradient(to right, #fdf4ff, #fae8ff)', padding: '20px', borderBottom: '1px solid #f5d0fe' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#86198f', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Cake size={20} /> Ultah PIC Bulan Ini
+            </h2>
+          </div>
+          <div style={{ padding: '20px' }}>
+            {birthdaysThisMonth.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem' }}>Tidak ada ulang tahun di bulan ini.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {birthdaysThisMonth.map(p => (
+                  <div key={p.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#fdf4ff', borderRadius: '16px', border: '1px solid #f5d0fe' }}>
+                    <div style={{ background: 'white', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c026d3', fontWeight: 800 }}>
+                      {p.dob.split('-')[2]}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#4a044e' }}>{p.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#a21caf' }}>{p.company_name || 'Klien'}</div>
+                    </div>
+                    <a href={`https://wa.me/${p.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: 'white', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center' }}>
+                      <MessageSquare size={16} />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Quick Analytics Summary */}
+        <div className="card-view" style={{ margin: 0, borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="card-header" style={{ background: '#f8fafc', padding: '20px', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart3 size={20} /> Sebaran Status
+            </h2>
+          </div>
+          <div style={{ padding: '20px' }}>
+            {STATUS_OPTIONS.map(status => {
+              const count = installations.filter(i => i.status === status && !Number(i.is_history)).length;
+              const totalActive = installations.filter(i => !Number(i.is_history)).length || 1;
+              const pct = (count / totalActive) * 100;
+              return (
+                <div key={status} style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                    <span>{status}</span>
+                    <span>{count}</span>
+                  </div>
+                  <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: status === 'Done' ? '#10b981' : status === 'Scheduled' ? '#3b82f6' : '#94a3b8', borderRadius: '4px' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
+    </div>
   );
 }
 
@@ -890,8 +937,9 @@ function CompanyPage({ can, currentUser }) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      const showAll = can('company_showall');
       const [resC, resM, resR] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list`),
+        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`),
         fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list_metadata`),
         fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`)
       ]);
@@ -960,14 +1008,14 @@ function CompanyPage({ can, currentUser }) {
     { header: 'Dibuat Oleh', accessor: 'creator_name' },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
     { header: 'Status', render: (row) => <span className={`badge ${Number(row.status_active) ? 'badge-success' : 'badge-danger'}`}>{Number(row.status_active) ? 'Aktif' : 'Non-Aktif'}</span> },
-    { 
-      header: 'Aksi', 
+    {
+      header: 'Aksi',
       render: (row) => (
         <div style={{ display: 'flex', gap: '8px' }}>
           {can('company_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => { setFormData({ id: row.id, name: row.name, address: row.address || '', industry_id: row.industry_id, region_id: row.region_id, type_id: row.type_id }); setModalOpen(true); }}>Edit</button>}
           {can('company_delete') && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: row.status_active ? '#fef2f2' : '#f0fdf4', color: row.status_active ? '#dc2626' : '#16a34a', border: '1px solid', borderColor: row.status_active ? '#fecaca' : '#bbf7d0' }} onClick={() => handleToggleStatus(row.id)}>{row.status_active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
         </div>
-      ) 
+      )
     }
   ];
 
@@ -977,7 +1025,7 @@ function CompanyPage({ can, currentUser }) {
     return matchesRegion && matchesStatus;
   });
 
-  if (!can('company_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1></div>;
+  if (!can('company_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   return (
     <div className="page-container">
@@ -996,7 +1044,7 @@ function CompanyPage({ can, currentUser }) {
                 return (
                   <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
                     {r?.region_name || rid}
-                    <button onClick={() => setFilterRegions(filterRegions.filter(id => id !== rid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12}/></button>
+                    <button onClick={() => setFilterRegions(filterRegions.filter(id => id !== rid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
                   </span>
                 );
               })}
@@ -1023,8 +1071,8 @@ function CompanyPage({ can, currentUser }) {
           <form onSubmit={handleSave}><div className="modal-body">
             <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Tipe Data</label><select className="form-control" value={formData.type_id} onChange={e => setFormData({ ...formData, type_id: e.target.value })}>{compTypes.map(t => <option key={t.id} value={t.id}>{t.type_name}</option>)}</select></div><div className="form-group" style={{ flex: 1 }}><label>Nama Perusahaan</label><input required className="form-control" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div></div>
             <div className="form-group"><label>Alamat</label><textarea className="form-control" style={{ height: '80px' }} value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} /></div>
-            <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Industri</label><select required className="form-control" value={formData.industry_id} onChange={e => setFormData({ ...formData, industry_id: e.target.value })}><option value="">Pilih Industri...</option>{industries.sort((a,b)=>a.industry_name==='Lainnya'?1:b.industry_name==='Lainnya'?-1:a.industry_name.localeCompare(b.industry_name)).map(ind => <option key={ind.id} value={ind.id}>{ind.industry_name}</option>)}</select></div>
-            <div className="form-group" style={{ flex: 1 }}><label>Region / Kota</label><select required className="form-control" value={formData.region_id} onChange={e => setFormData({ ...formData, region_id: e.target.value })}><option value="">Pilih Region...</option>{regions.map(r => <option key={r.id} value={r.id}>{r.region_name}</option>)}</select></div></div>
+            <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Industri</label><select required className="form-control" value={formData.industry_id} onChange={e => setFormData({ ...formData, industry_id: e.target.value })}><option value="">Pilih Industri...</option>{industries.sort((a, b) => a.industry_name === 'Lainnya' ? 1 : b.industry_name === 'Lainnya' ? -1 : a.industry_name.localeCompare(b.industry_name)).map(ind => <option key={ind.id} value={ind.id}>{ind.industry_name}</option>)}</select></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Region / Kota</label><select required className="form-control" value={formData.region_id} onChange={e => setFormData({ ...formData, region_id: e.target.value })}><option value="">Pilih Region...</option>{regions.map(r => <option key={r.id} value={r.id}>{r.region_name}</option>)}</select></div></div>
             {industries.find(i => Number(i.id) === Number(formData.industry_id))?.industry_name === 'Lainnya' && <div className="form-group" style={{ background: '#f0f9ff', padding: '12px', borderRadius: '4px', border: '1px dashed #0284c7' }}><label style={{ color: '#0369a1', fontWeight: 'bold' }}>Input Nama Industri Baru</label><input className="form-control" type="text" placeholder="Contoh: Otomotif, Tekstil..." value={newIndustry} onChange={e => setNewIndustry(e.target.value)} /></div>}
           </div><div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan'}</button></div></form></div></div>
       )}
@@ -1087,18 +1135,18 @@ function RegionPage({ can, currentUser }) {
     { header: 'Nama Region', accessor: 'region_name', render: (row) => <strong>{row.region_name}</strong> },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
     { header: 'Status', render: (row) => <span className={`badge ${(row.status || 'active') === 'active' ? 'badge-success' : 'badge-danger'}`}>{(row.status || 'active') === 'active' ? 'Aktif' : 'Non-Aktif'}</span> },
-    { 
-      header: 'Aksi', 
+    {
+      header: 'Aksi',
       render: (row) => (
         <div style={{ display: 'flex', gap: '8px' }}>
           {can('region_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => { setFormData({ id: row.id, name: row.region_name }); setModalOpen(true); }}>Edit</button>}
           {can('region_delete') && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: (row.status || 'active') === 'active' ? '#fef2f2' : '#f0fdf4', color: (row.status || 'active') === 'active' ? '#dc2626' : '#16a34a', border: '1px solid', borderColor: (row.status || 'active') === 'active' ? '#fecaca' : '#bbf7d0' }} onClick={() => handleToggleStatus(row.id)}>{(row.status || 'active') === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button>}
         </div>
-      ) 
+      )
     }
   ];
 
-  if (!can('region_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1></div>;
+  if (!can('region_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   return (
     <div className="page-container">
@@ -1138,9 +1186,11 @@ function PICPage({ can, currentUser }) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      const picShowAll = can('pic_showall');
+      const compShowAll = can('company_showall');
       const [resP, resC] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=list`),
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list`)
+        fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=list&user_id=${currentUser?.id || ''}&show_all=${picShowAll}`),
+        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${compShowAll}`)
       ]);
       const dP = await resP.json();
       const dC = await resC.json();
@@ -1191,14 +1241,14 @@ function PICPage({ can, currentUser }) {
     { header: 'Handphone', accessor: 'phone' },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
     { header: 'Status', render: (row) => <span className={`badge ${(row.status || 'active') === 'active' ? 'badge-success' : 'badge-danger'}`}>{(row.status || 'active') === 'active' ? 'Aktif' : 'Non-Aktif'}</span> },
-    { 
-      header: 'Aksi', 
+    {
+      header: 'Aksi',
       render: (row) => (
         <div style={{ display: 'flex', gap: '8px' }}>
           {can('pic_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => { setFormData({ id: row.id, name: row.name, company_id: row.company_id, job_title: row.job_title || '', phone: row.phone || '', email: row.email || '', dob: row.dob || '', address: row.address || '' }); setModalOpen(true); }}>Edit</button>}
           {can('pic_delete') && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: (row.status || 'active') === 'active' ? '#fef2f2' : '#f0fdf4', color: (row.status || 'active') === 'active' ? '#dc2626' : '#16a34a', border: '1px solid', borderColor: (row.status || 'active') === 'active' ? '#fecaca' : '#bbf7d0' }} onClick={() => handleToggleStatus(row.id)}>{(row.status || 'active') === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button>}
         </div>
-      ) 
+      )
     }
   ];
 
@@ -1208,7 +1258,7 @@ function PICPage({ can, currentUser }) {
     return matchesCompany && matchesStatus;
   });
 
-  if (!can('pic_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1></div>;
+  if (!can('pic_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   return (
     <div className="page-container">
@@ -1227,7 +1277,7 @@ function PICPage({ can, currentUser }) {
                 return (
                   <span key={cid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
                     {c?.name || cid}
-                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12}/></button>
+                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
                   </span>
                 );
               })}
@@ -1259,7 +1309,7 @@ function PICPage({ can, currentUser }) {
             <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Jabatan</label><input className="form-control" value={formData.job_title} onChange={e => setFormData({ ...formData, job_title: e.target.value })} /></div><div className="form-group" style={{ flex: 1 }}><label>Tanggal Lahir</label><input type="date" className="form-control" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} /></div></div>
             <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Telepon</label><input className="form-control" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></div><div className="form-group" style={{ flex: 1 }}><label>Email</label><input type="email" className="form-control" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div></div>
           </div>
-          <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan'}</button></div></form>
+            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan'}</button></div></form>
         </div></div>
       )}
     </div>
@@ -1305,10 +1355,11 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
   const reloadInstallations = async () => {
     try {
-      const resList = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list`);
+      const showAll = can('sales_showall');
+      const resList = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
       const jsonList = await resList.json();
       if (jsonList.status === 'success') setInstallations(jsonList.data);
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
   const handleSave = async (e) => {
@@ -1326,7 +1377,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setFormData({ companyId: '', products: [getInitialProduct()] });
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch(e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
   const handleBulkEditSave = async () => {
@@ -1342,7 +1393,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setEditModal(false);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch(e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
   const handleBulkToggle = async (activate) => {
@@ -1360,7 +1411,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setSelectedIds([]);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
   const toggleExpand = (companyId) => {
@@ -1387,8 +1438,8 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
       const base = i.installation_date || getLocalDateString();
       const val = i.maintenance_cycle_value || '1';
       const unit = i.maintenance_cycle_unit || 'years';
-      return { 
-        ...i, 
+      return {
+        ...i,
         installation_date: base,
         maintenance_cycle_value: val,
         maintenance_cycle_unit: unit,
@@ -1445,7 +1496,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setRenewModal(false);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch(e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
   const openHistory = async (companyId, companyName) => {
@@ -1454,11 +1505,11 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
       const res = await fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${companyId}`);
       const data = await res.json();
       if (data.status === 'success') {
-         setHistoryItems(data.data);
+        setHistoryItems(data.data);
       } else {
-         setHistoryItems([]);
+        setHistoryItems([]);
       }
-    } catch(e) {
+    } catch (e) {
       console.error(e);
       setHistoryItems([]);
     }
@@ -1514,7 +1565,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               {filterRegions.map(rid => (
                 <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
                   {rid}
-                  <button onClick={() => setFilterRegions(filterRegions.filter(id => id !== rid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12}/></button>
+                  <button onClick={() => setFilterRegions(filterRegions.filter(id => id !== rid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
                 </span>
               ))}
             </div>
@@ -1609,7 +1660,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                     </button>
                   )}
                   {(can('installation_transfer') || can('sales_update')) && (
-                    <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={e => { e.stopPropagation(); setTransferTarget({ companyId: group.company.id, companyName: group.company.name, fromUserId: group.items[0]?.assigned_to, fromUserName: group.items[0]?.assigned_to_name }); setTransferOpen(true); }}>
+                    <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={e => { e.stopPropagation(); setTransferTarget({ companyId: group.company.id, companyName: group.company.name, fromUserId: group.items[0]?.assigned_to, fromUserName: group.items[0]?.assigned_to_name, installationId: null }); setTransferOpen(true); }}>
                       Transfer
                     </button>
                   )}
@@ -1629,6 +1680,8 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                           <th>Tgl Instalasi</th>
                           <th>Siklus</th>
                           <th>Target Ganti</th>
+                          <th>Tgl Follow Up</th>
+                          <th>Visit Schedule</th>
                           <th>Status</th>
                           <th>Status Data</th>
                           <th>Audit</th>
@@ -1651,6 +1704,8 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                                   <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff}`}</div>
                                 </div>
                               </td>
+                              <td>{row.followup_date || '-'}</td>
+                              <td>{row.visit_schedule_date || '-'}</td>
                               <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
                               <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
@@ -1691,54 +1746,54 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                 <div style={{ flex: 1, minWidth: '300px' }}>
                   <div className="form-group" style={{ marginBottom: '20px' }}>
                     <label style={{ fontWeight: 700, color: '#0f172a' }}>Pilih Klien / Prospek Utama</label>
-                    <select required className="form-control" style={{ border: '2px solid #e2e8f0' }} value={formData.companyId} onChange={e => setFormData({...formData, companyId: e.target.value})}>
+                    <select required className="form-control" style={{ border: '2px solid #e2e8f0' }} value={formData.companyId} onChange={e => setFormData({ ...formData, companyId: e.target.value })}>
                       <option value="">-- Pilih Company / Prospek --</option>
-                      {companies.sort((a,b) => a.name.localeCompare(b.name)).map(c => <option value={c.id} key={c.id}>{c.name} ({c.type})</option>)}
+                      {companies.sort((a, b) => a.name.localeCompare(b.name)).map(c => <option value={c.id} key={c.id}>{c.name} ({c.type})</option>)}
                     </select>
                   </div>
                   {formData.companyId && (() => {
                     const existingProds = installations.filter(i => String(i.company_id) === String(formData.companyId) && !Number(i.is_history));
                     const historyCount = installations.filter(i => String(i.company_id) === String(formData.companyId) && Number(i.is_history) === 1).length;
                     return (
-                    <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Database size={16} color="#0284c7" /> Produk Terpasang Saat Ini
-                        </h4>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <span style={{ background: '#e0f2fe', color: '#0284c7', fontSize: '10px', padding: '3px 8px', borderRadius: '10px', fontWeight: 700 }}>{existingProds.length} Aktif</span>
-                          {historyCount > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '10px', padding: '3px 8px', borderRadius: '10px', fontWeight: 600 }}>{historyCount} Riwayat</span>}
+                      <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Database size={16} color="#0284c7" /> Produk Terpasang Saat Ini
+                          </h4>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <span style={{ background: '#e0f2fe', color: '#0284c7', fontSize: '10px', padding: '3px 8px', borderRadius: '10px', fontWeight: 700 }}>{existingProds.length} Aktif</span>
+                            {historyCount > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '10px', padding: '3px 8px', borderRadius: '10px', fontWeight: 600 }}>{historyCount} Riwayat</span>}
+                          </div>
                         </div>
+                        {existingProds.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                            <Wrench size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                            <p style={{ fontSize: '0.85rem', margin: 0, fontStyle: 'italic' }}>Belum ada produk aktif untuk klien ini.</p>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {existingProds.map(i => {
+                              const diff = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000);
+                              const urgent = diff <= 30 && i.status !== 'Done';
+                              return (
+                                <div key={i.id} style={{ padding: '12px 14px', background: 'white', border: urgent ? '1px solid #fecaca' : '1px solid #e2e8f0', borderRadius: '12px', borderLeft: urgent ? '4px solid #ef4444' : '4px solid #0ea5e9' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem' }}>{i.product_name}</span>
+                                    <span className={`badge ${i.status === 'Done' ? 'badge-success' : urgent ? 'badge-danger' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>{i.status}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#64748b' }}>
+                                    <span>Pasang: {i.installation_date || '-'}</span>
+                                    <span style={{ color: urgent ? '#ef4444' : '#0284c7', fontWeight: 700 }}>
+                                      Target: {i.replacement_date} ({diff < 0 ? `Lewat ${Math.abs(diff)}d` : `H-${diff}`})
+                                    </span>
+                                    <span>Siklus: {i.maintenance_cycle_value} {i.maintenance_cycle_unit}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      {existingProds.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                          <Wrench size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                          <p style={{ fontSize: '0.85rem', margin: 0, fontStyle: 'italic' }}>Belum ada produk aktif untuk klien ini.</p>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {existingProds.map(i => {
-                            const diff = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000);
-                            const urgent = diff <= 30 && i.status !== 'Done';
-                            return (
-                              <div key={i.id} style={{ padding: '12px 14px', background: 'white', border: urgent ? '1px solid #fecaca' : '1px solid #e2e8f0', borderRadius: '12px', borderLeft: urgent ? '4px solid #ef4444' : '4px solid #0ea5e9' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem' }}>{i.product_name}</span>
-                                  <span className={`badge ${i.status === 'Done' ? 'badge-success' : urgent ? 'badge-danger' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>{i.status}</span>
-                                </div>
-                                <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#64748b' }}>
-                                  <span>Pasang: {i.installation_date || '-'}</span>
-                                  <span style={{ color: urgent ? '#ef4444' : '#0284c7', fontWeight: 700 }}>
-                                    Target: {i.replacement_date} ({diff < 0 ? `Lewat ${Math.abs(diff)}d` : `H-${diff}`})
-                                  </span>
-                                  <span>Siklus: {i.maintenance_cycle_value} {i.maintenance_cycle_unit}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
                     );
                   })()}
                 </div>
@@ -1781,14 +1836,14 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                             </div>
                           </div>
                           {formData.products.length > 1 && (
-                            <button type="button" onClick={() => setFormData({...formData, products: formData.products.filter((_,i)=>i!==index)})} style={{ position: 'absolute', top: '-10px', right: '-10px', width: '24px', height: '24px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                            <button type="button" onClick={() => setFormData({ ...formData, products: formData.products.filter((_, i) => i !== index) })} style={{ position: 'absolute', top: '-10px', right: '-10px', width: '24px', height: '24px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
                               <X size={14} />
                             </button>
                           )}
                         </div>
                       ))}
                     </div>
-                    <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', border: '2px dashed #bae6fd', background: 'white', color: '#0284c7', fontWeight: 600 }} onClick={() => setFormData({...formData, products: [...formData.products, getInitialProduct()]})}>
+                    <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', border: '2px dashed #bae6fd', background: 'white', color: '#0284c7', fontWeight: 600 }} onClick={() => setFormData({ ...formData, products: [...formData.products, getInitialProduct()] })}>
                       <Plus size={18} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Tambah Item Produk Lainnya
                     </button>
                   </div>
@@ -1859,6 +1914,10 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                           </select>
                         </div>
                         <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Tanggal Follow Up</label>
+                          <input type="date" className="form-control" value={item.followup_date || ''} onChange={e => updateEditItem(idx, 'followup_date', e.target.value)} />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
                           <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Catatan</label>
                           <input className="form-control" value={item.notes || ''} onChange={e => updateEditItem(idx, 'notes', e.target.value)} placeholder="Catatan..." />
                         </div>
@@ -1899,29 +1958,29 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontWeight: 600, fontSize: '0.8rem' }}>Nama Produk (baru)</label>
-                  <input className="form-control" value={renewData.product_name} onChange={e => setRenewData({...renewData, product_name: e.target.value})} />
+                  <input className="form-control" value={renewData.product_name} onChange={e => setRenewData({ ...renewData, product_name: e.target.value })} />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontWeight: 600, fontSize: '0.8rem' }}>Tgl Pasang Baru</label>
                   <input type="date" className="form-control" value={renewData.installation_date} onChange={e => {
                     const d = e.target.value;
-                    setRenewData({...renewData, installation_date: d, replacement_date: calculateNextDate(d, renewData.maintenance_cycle_value, renewData.maintenance_cycle_unit)});
+                    setRenewData({ ...renewData, installation_date: d, replacement_date: calculateNextDate(d, renewData.maintenance_cycle_value, renewData.maintenance_cycle_unit) });
                   }} />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontWeight: 700, fontSize: '0.8rem', color: '#0ea5e9' }}>Target Ganti Berikutnya</label>
-                  <input type="date" className="form-control" style={{ borderColor: '#0ea5e9' }} value={renewData.replacement_date} onChange={e => setRenewData({...renewData, replacement_date: e.target.value})} />
+                  <input type="date" className="form-control" style={{ borderColor: '#0ea5e9' }} value={renewData.replacement_date} onChange={e => setRenewData({ ...renewData, replacement_date: e.target.value })} />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontWeight: 600, fontSize: '0.8rem' }}>Siklus Ulang</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input type="number" className="form-control" style={{ width: '60px', padding: '6px' }} value={renewData.maintenance_cycle_value} onChange={e => {
                       const v = e.target.value;
-                      setRenewData({...renewData, maintenance_cycle_value: v, replacement_date: calculateNextDate(renewData.installation_date, v, renewData.maintenance_cycle_unit)});
+                      setRenewData({ ...renewData, maintenance_cycle_value: v, replacement_date: calculateNextDate(renewData.installation_date, v, renewData.maintenance_cycle_unit) });
                     }} />
                     <select className="form-control" style={{ flex: 1, padding: '6px' }} value={renewData.maintenance_cycle_unit} onChange={e => {
                       const u = e.target.value;
-                      setRenewData({...renewData, maintenance_cycle_unit: u, replacement_date: calculateNextDate(renewData.installation_date, renewData.maintenance_cycle_value, u)});
+                      setRenewData({ ...renewData, maintenance_cycle_unit: u, replacement_date: calculateNextDate(renewData.installation_date, renewData.maintenance_cycle_value, u) });
                     }}>
                       <option value="days">Hari</option><option value="months">Bulan</option><option value="years">Tahun</option>
                     </select>
@@ -1930,7 +1989,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               </div>
               <div className="form-group" style={{ marginTop: '16px' }}>
                 <label style={{ fontWeight: 600, fontSize: '0.8rem' }}>Catatan Perpanjangan</label>
-                <textarea className="form-control" style={{ height: '70px' }} value={renewData.notes} onChange={e => setRenewData({...renewData, notes: e.target.value})} placeholder="Mis: Penggantian filter karena sudah kotor..." />
+                <textarea className="form-control" style={{ height: '70px' }} value={renewData.notes} onChange={e => setRenewData({ ...renewData, notes: e.target.value })} placeholder="Mis: Penggantian filter karena sudah kotor..." />
               </div>
             </div>
             <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
@@ -1949,9 +2008,9 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Archive size={22} /> Riwayat Perpanjangan
+                  <Archive size={22} /> Riwayat Aktivitas Instalasi
                 </h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Log produk yang sudah di-renew untuk: <strong>{historyCompany}</strong></p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Log perubahan produk, status, dan jadwal kunjungan untuk: <strong>{historyCompany}</strong></p>
               </div>
               <button className="close-btn" onClick={() => setHistoryModal(false)}><X size={24} /></button>
             </div>
@@ -1959,11 +2018,17 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               {historyItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
                   <Archive size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                  <p style={{ margin: 0, fontWeight: 600 }}>Belum ada riwayat perpanjangan untuk klien ini.</p>
+                  <p style={{ margin: 0, fontWeight: 600 }}>Belum ada riwayat aktivitas untuk klien ini.</p>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {historyItems.map((item, idx) => (
+                  {historyItems.map((item, idx) => {
+                    const oldValues = parseActivityPayload(item.old_values);
+                    const newValues = parseActivityPayload(item.new_values);
+                    const hasOldValues = oldValues.length > 0;
+                    const hasNewValues = newValues.length > 0;
+
+                    return (
                     <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: idx % 2 === 0 ? '#f8fafc' : 'white', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
                         {idx + 1}
@@ -1975,6 +2040,8 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                               {item.action_type === 'CREATE' && <span className="badge badge-info" style={{ fontSize: '9px' }}>ADD</span>}
                               {item.action_type === 'EDIT' && <span className="badge badge-warning" style={{ fontSize: '9px' }}>EDIT</span>}
                               {item.action_type === 'RENEW' && <span className="badge badge-success" style={{ fontSize: '9px' }}>RENEW</span>}
+                              {item.action_type === 'STATUS_CHANGE' && <span className="badge" style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e' }}>STATUS</span>}
+                              {item.action_type === 'SCHEDULE_VISIT' && <span className="badge" style={{ fontSize: '9px', background: '#dcfce7', color: '#166534' }}>VISIT</span>}
                               {item.action_type === 'TOGGLE' && <span className="badge" style={{ fontSize: '9px', background: '#e2e8f0', color: '#475569' }}>STATUS</span>}
                               {item.description}
                             </div>
@@ -1983,16 +2050,28 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                             </div>
                           </div>
                         </div>
-                        {item.new_values && (
-                          <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {(() => {
-                              try {
-                                const vals = JSON.parse(item.new_values);
-                                return Object.keys(vals).map(k => (
-                                  <div key={k}><strong>{k.replace(/_/g, ' ').toUpperCase()}:</strong> {String(vals[k])}</div>
-                                ));
-                              } catch(e) { return <div>Error parsing values</div>; }
-                            })()}
+                        {(hasOldValues || hasNewValues) && (
+                          <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: hasOldValues && hasNewValues ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                            {hasOldValues && (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sebelum</div>
+                                <div style={{ display: 'grid', gap: '6px' }}>
+                                  {oldValues.map(entry => (
+                                    <div key={`old-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {hasNewValues && (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sesudah</div>
+                                <div style={{ display: 'grid', gap: '6px' }}>
+                                  {newValues.map(entry => (
+                                    <div key={`new-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                         <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -2000,7 +2079,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </div>
@@ -2010,15 +2089,15 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
           </div>
         </div>
       )}
-      <TransferModal 
-        isOpen={transferOpen} 
-        onClose={() => setTransferOpen(false)} 
-        companyId={transferTarget.companyId} 
-        companyName={transferTarget.companyName} 
-        fromUserId={transferTarget.fromUserId} 
-        fromUserName={transferTarget.fromUserName} 
-        currentUser={currentUser} 
-        onTransferDone={() => { setTransferOpen(false); reloadInstallations(); }} 
+      <TransferModal
+        isOpen={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        companyId={transferTarget.companyId}
+        companyName={transferTarget.companyName}
+        fromUserId={transferTarget.fromUserId}
+        fromUserName={transferTarget.fromUserName}
+        currentUser={currentUser}
+        onTransferDone={() => { setTransferOpen(false); reloadInstallations(); }}
       />
     </div>
   );
@@ -2036,15 +2115,15 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState({ companyId: '', companyName: '', fromUserId: '', fromUserName: '' });
 
-  if (!can('installation_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1></div>;
+  if (!can('installation_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   const reloadInstallations = async () => {
     try {
-      const hasShowAll = can('workorder_showall');
+      const hasShowAll = can('installation_showall');
       const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
-      if(jsonL.status === 'success') setInstallations(jsonL.data);
-    } catch(e) { console.error(e); }
+      if (jsonL.status === 'success') setInstallations(jsonL.data);
+    } catch (e) { console.error(e); }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -2055,10 +2134,10 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
         body: JSON.stringify({ id, status: newStatus, user_id: currentUser?.id })
       });
       const d = await res.json();
-      if(d.status === 'success') {
+      if (d.status === 'success') {
         setInstallations(prev => prev.map(i => i.id === id ? { ...i, status: newStatus, last_editor_name: currentUser?.username } : i));
       }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
   const handleEditSave = async (e) => {
@@ -2093,53 +2172,67 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
   });
 
   const columns = [
-    { header: 'Klien', accessor: 'company_name', render: (row) => (
-      <div>
-        <div style={{ fontWeight: 600 }}>{row.company_name}</div>
-        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{row.region} | {row.company_type}</div>
-      </div>
-    )},
-    { header: 'Produk Terpasang', accessor: 'product_name', render: (row) => (
-       <strong style={{ color: '#0369a1' }}>{row.product_name}</strong>
-    )},
+    {
+      header: 'Klien', accessor: 'company_name', render: (row) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{row.company_name}</div>
+          <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{row.region} | {row.company_type}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Produk Terpasang', accessor: 'product_name', render: (row) => (
+        <strong style={{ color: '#0369a1' }}>{row.product_name}</strong>
+      )
+    },
     { header: 'Tgl Instalasi', accessor: 'installation_date' },
-    { header: 'Siklus Ganti', render: (row) => (
-       <span>Tiap {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</span>
-    )},
-    { header: 'Target Selanjutnya', accessor: 'replacement_date', render: (row) => {
-       const diff = Math.ceil((new Date(row.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-       return (
-         <div style={{ color: diff < 0 ? '#ef4444' : diff <= 30 ? '#f59e0b' : 'inherit' }}>
-           <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
-           <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff} Hari`}</div>
-         </div>
-       );
-    }},
-    { header: 'Status', accessor: 'status', render: (row) => (
-       can('installation_update') ? (
-         <select className="form-control" style={{ width: '155px', padding: '4px', fontSize: '0.75rem' }} value={row.status} onChange={(e) => updateStatus(row.id, e.target.value)}>
-           {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
-         </select>
-       ) : (
-         <span className={`badge ${row.status === 'Done' ? 'badge-success' : 'badge-info'}`}>{row.status}</span>
-       )
-    )},
-    { header: 'PIC Sales', render: (row) => (
-       <div style={{ fontSize: '11px' }}>
-         <div style={{ fontWeight: 600, color: '#0369a1' }}>{row.assigned_to_name || '-'}</div>
-         <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>Oleh: {row.creator_name || '-'}</div>
-       </div>
-    )},
-    { header: 'Aksi', render: (row) => (
-       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-         {can('installation_update') && (
-           <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => { setEditData({ ...row }); setEditModal(true); }}>Edit</button>
-         )}
-         {(can('installation_transfer') || can('installation_update')) && (
-           <button className="btn" style={{ padding: '4px 10px', fontSize: '11px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name }); setTransferOpen(true); }}>ðŸ”€ Transfer</button>
-         )}
-       </div>
-    )}
+    {
+      header: 'Siklus Ganti', render: (row) => (
+        <span>Tiap {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</span>
+      )
+    },
+    {
+      header: 'Target Selanjutnya', accessor: 'replacement_date', render: (row) => {
+        const diff = Math.ceil((new Date(row.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+        return (
+          <div style={{ color: diff < 0 ? '#ef4444' : diff <= 30 ? '#f59e0b' : 'inherit' }}>
+            <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
+            <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff} Hari`}</div>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Status', accessor: 'status', render: (row) => (
+        can('installation_update') ? (
+          <select className="form-control" style={{ width: '155px', padding: '4px', fontSize: '0.75rem' }} value={row.status} onChange={(e) => updateStatus(row.id, e.target.value)}>
+            {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
+          </select>
+        ) : (
+          <span className={`badge ${row.status === 'Done' ? 'badge-success' : 'badge-info'}`}>{row.status}</span>
+        )
+      )
+    },
+    {
+      header: 'PIC Sales', render: (row) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600, color: '#0369a1' }}>{row.assigned_to_name || '-'}</div>
+          <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>Oleh: {row.creator_name || '-'}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Aksi', render: (row) => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {can('installation_update') && (
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => { setEditData({ ...row }); setEditModal(true); }}>Edit</button>
+          )}
+          {(can('installation_transfer') || can('installation_update')) && (
+            <button className="btn" style={{ padding: '4px 10px', fontSize: '11px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>
+          )}
+        </div>
+      )
+    }
   ];
 
   return (
@@ -2155,7 +2248,7 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
                 return (
                   <span key={cid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
                     {c?.name || cid}
-                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12}/></button>
+                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
                   </span>
                 );
               })}
@@ -2197,18 +2290,18 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
                 <div style={{ display: 'flex', gap: '16px' }}>
                   <div className="form-group" style={{ flex: 1 }}>
                     <label>Status</label>
-                    <select className="form-control" value={editData.status} onChange={e => setEditData({...editData, status: e.target.value})}>
+                    <select className="form-control" value={editData.status} onChange={e => setEditData({ ...editData, status: e.target.value })}>
                       {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
                     </select>
                   </div>
                   <div className="form-group" style={{ flex: 1 }}>
                     <label style={{ color: '#0ea5e9', fontWeight: 600 }}>Target Penggantian</label>
-                    <input type="date" className="form-control" value={editData.replacement_date} onChange={e => setEditData({...editData, replacement_date: e.target.value})} />
+                    <input type="date" className="form-control" value={editData.replacement_date} onChange={e => setEditData({ ...editData, replacement_date: e.target.value })} />
                   </div>
                 </div>
                 <div className="form-group">
                   <label>Catatan / Notes</label>
-                  <textarea className="form-control" style={{ height: '80px' }} value={editData.notes || ''} onChange={e => setEditData({...editData, notes: e.target.value})} placeholder="Tambahkan catatan..." />
+                  <textarea className="form-control" style={{ height: '80px' }} value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} placeholder="Tambahkan catatan..." />
                 </div>
               </div>
               <div className="modal-footer">
@@ -2237,48 +2330,68 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
 
 function ProspectingPage({ companies, installations, can, regions, currentUser, onAssignmentDone }) {
   const [regionFilter, setRegionFilter] = useState('');
+  const [picFilter, setPicFilter] = useState('');
   const [modalCompany, setModalCompany] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedInstIds, setSelectedInstIds] = useState([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [targetAgentId, setTargetAgentId] = useState('');
   const [visitDate, setVisitDate] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([]);
 
   useEffect(() => {
-    const fetchTeam = async () => {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=false`);
-        const json = await res.json();
-        if (json.status === 'success') {
-          // Filter out current user if needed, or just show all team members
-          setTeamMembers(json.data.filter(u => u.status === 'active'));
-        }
-      } catch (e) { console.error(e); }
-    };
-    if (can('prospecting_assign') || can('installation_transfer')) fetchTeam();
-  }, [currentUser.id, can]);
+    setCurrentPage(1);
+    setSelectedInstIds([]);
+  }, [regionFilter, picFilter]);
 
-  useEffect(() => { setCurrentPage(1); }, [regionFilter]);
+  if (!can('prospecting_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>prospecting_read</code>.</p></div>;
 
-  if (!can('prospecting_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>prospecting_read</code>.</p></div>;
+  const urgentInstallations = useMemo(() => (
+    installations.filter(inst => {
+      if (inst.status === 'Done' || Number(inst.is_history) === 1) return false;
+      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 30) return false;
+      if (regionFilter && inst.region !== regionFilter) return false;
+      if (picFilter === '__unassigned__' && inst.assigned_to) return false;
+      if (picFilter && picFilter !== '__unassigned__' && String(inst.assigned_to || '') !== picFilter) return false;
+      return true;
+    })
+  ), [installations, regionFilter, picFilter]);
+
+  const picOptions = useMemo(() => {
+    const seen = new globalThis.Map();
+    installations.forEach(inst => {
+      if (inst.status === 'Done' || Number(inst.is_history) === 1) return;
+      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 30) return;
+      if (regionFilter && inst.region !== regionFilter) return;
+
+      const key = inst.assigned_to ? String(inst.assigned_to) : '__unassigned__';
+      const label = inst.assigned_to_name || 'Unassigned';
+      if (!seen.has(key)) seen.set(key, { value: key, label });
+    });
+    return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [installations, regionFilter]);
 
   const groupedClusteredData = useMemo(() => {
     const groups = {};
-    installations.forEach(inst => {
-      const comp = companies.find(c => Number(c.id) === Number(inst.company_id));
-      if (comp && (!regionFilter || comp.region_name === regionFilter) && inst.status !== 'Done' && !inst.is_history) {
-         const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-         if (diffDays <= 30) {
-            if (!groups[comp.id]) groups[comp.id] = { company: comp, items: [], minDiffDays: diffDays };
-            groups[comp.id].items.push({ ...inst, diffDays });
-            if (diffDays < groups[comp.id].minDiffDays) groups[comp.id].minDiffDays = diffDays;
-         }
-      }
+    urgentInstallations.forEach(inst => {
+      const companyRecord = companies.find(c => Number(c.id) === Number(inst.company_id));
+      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+      const company = {
+        id: inst.company_id,
+        name: companyRecord?.name || inst.company_name || `Company #${inst.company_id}`,
+        type: companyRecord?.type || inst.company_type || 'Customer',
+        address: companyRecord?.address || '-',
+        region: companyRecord?.region_name || inst.region || '-',
+        region_name: companyRecord?.region_name || inst.region || '-'
+      };
+
+      if (!groups[company.id]) groups[company.id] = { company, items: [], minDiffDays: diffDays };
+      groups[company.id].items.push({ ...inst, diffDays });
+      if (diffDays < groups[company.id].minDiffDays) groups[company.id].minDiffDays = diffDays;
     });
-    return Object.values(groups).sort((a,b) => a.minDiffDays - b.minDiffDays);
-  }, [installations, companies, regionFilter]);
+    return Object.values(groups).sort((a, b) => a.minDiffDays - b.minDiffDays);
+  }, [urgentInstallations, companies]);
 
   const currentData = groupedClusteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -2297,15 +2410,14 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
 
   const handleBulkAssign = async (e) => {
     e.preventDefault();
-    if (!targetAgentId) return alert('Pilih Agent terlebih dahulu.');
+    if (!visitDate) return alert('Tentukan tanggal kunjungan terlebih dahulu.');
     setIsAssigning(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_assign`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_schedule_visit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           installation_ids: selectedInstIds,
-          to_user_id: targetAgentId,
           visit_date: visitDate,
           user_id: currentUser.id
         })
@@ -2314,6 +2426,7 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
       if (d.status === 'success') {
         alert(d.message);
         setSelectedInstIds([]);
+        setVisitDate('');
         setAssignModalOpen(false);
         if (onAssignmentDone) onAssignmentDone();
       } else {
@@ -2327,29 +2440,36 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 className="page-title" style={{ margin: 0 }}>Smart Prospecting & Routing</h1>
-          <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)' }}>Otoritas Penjadwalan & Alokasi Rute Kunjungan Agent</p>
+          <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)' }}>Otoritas Penjadwalan Rute Kunjungan berdasarkan data urgent per klien</p>
         </div>
         {selectedInstIds.length > 0 && can('prospecting_assign') && (
           <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.2)' }} onClick={() => setAssignModalOpen(true)}>
-            <Send size={18} /> Berikan Jadwal ke Agent ({selectedInstIds.length})
+            <Send size={18} /> Atur Jadwal Kunjungan ({selectedInstIds.length})
           </button>
         )}
       </div>
-      
+
       <div className="card-view" style={{ padding: '24px', marginBottom: '24px', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', borderColor: '#bae6fd' }}>
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="form-group" style={{ flex: 1, maxWidth: '400px', margin: 0 }}>
             <label style={{ color: '#0369a1', fontWeight: '700', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filter Area / Region Kunjungan:</label>
             <select className="form-control" style={{ border: '2px solid #38bdf8', borderRadius: '10px' }} value={regionFilter} onChange={e => setRegionFilter(e.target.value)}>
               <option value="">-- Semua Wilayah --</option>
-              {REGION_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
+              {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{ flex: 1, maxWidth: '320px', margin: 0 }}>
+            <label style={{ color: '#0369a1', fontWeight: '700', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filter PIC Sales:</label>
+            <select className="form-control" style={{ border: '2px solid #38bdf8', borderRadius: '10px' }} value={picFilter} onChange={e => setPicFilter(e.target.value)}>
+              <option value="">-- Semua PIC --</option>
+              {picOptions.map(opt => <option key={opt.value || opt.label} value={opt.value}>{opt.label}</option>)}
             </select>
           </div>
           <div style={{ flex: 2, display: 'flex', gap: '12px' }}>
-             <div style={{ background: 'white', padding: '10px 16px', borderRadius: '10px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Info size={16} color="#0284c7" />
-                <span style={{ fontSize: '0.85rem', color: '#0369a1' }}>Ditemukan <strong>{groupedClusteredData.length} Klien</strong> dengan urgensi kunjungan.</span>
-             </div>
+            <div style={{ background: 'white', padding: '10px 16px', borderRadius: '10px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Info size={16} color="#0284c7" />
+              <span style={{ fontSize: '0.85rem', color: '#0369a1' }}>Ditemukan <strong>{groupedClusteredData.length} Klien</strong> dengan urgensi kunjungan.</span>
+            </div>
           </div>
         </div>
       </div>
@@ -2357,65 +2477,72 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
       <div className="card-view" style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
           {currentData.length === 0 ? (
-             <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '64px', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', color: 'var(--text-muted)' }}>
-               <div style={{ marginBottom: '16px' }}><CheckCircle2 size={48} color="#10b981" style={{ opacity: 0.5 }} /></div>
-               <h3 style={{ margin: 0 }}>Rute Aman!</h3>
-               <p>Tidak ada urgensi penawaran/penggantian kunjungan dalam wilayah ini.</p>
-             </div>
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '64px', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', color: 'var(--text-muted)' }}>
+              <div style={{ marginBottom: '16px' }}><CheckCircle2 size={48} color="#10b981" style={{ opacity: 0.5 }} /></div>
+              <h3 style={{ margin: 0 }}>Rute Aman!</h3>
+              <p>Tidak ada urgensi penawaran/penggantian kunjungan dalam wilayah ini.</p>
+            </div>
           ) : currentData.map((group, index) => {
             const allSelected = group.items.every(i => selectedInstIds.includes(i.id));
             const someSelected = group.items.some(i => selectedInstIds.includes(i.id));
-            
+            const uniquePics = [...new Set(group.items.map(i => i.assigned_to_name || 'Unassigned'))];
+            const picSummary = uniquePics.length > 1 ? `${uniquePics[0]} +${uniquePics.length - 1} lainnya` : uniquePics[0];
+
             return (
-              <div key={group.company.id} style={{ 
-                background: 'white', 
-                borderRadius: '24px', 
-                border: someSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0', 
-                padding: '24px', 
-                display: 'flex', 
-                flexDirection: 'column', 
+              <div key={group.company.id} style={{
+                background: 'white',
+                borderRadius: '24px',
+                border: someSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
                 gap: '16px',
                 transition: 'all 0.2s ease',
                 boxShadow: someSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : 'none'
               }}>
-                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>{group.company.name}</h3>
-                        <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>{group.company.type}</span>
-                      </div>
-                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}><MapPin size={14} style={{ marginRight: '4px' }}/>{group.company.region_name}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>{group.company.name}</h3>
+                      <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>{group.company.type}</span>
                     </div>
-                    {can('prospecting_assign') && (
-                      <input type="checkbox" style={{ width: '24px', height: '24px', cursor: 'pointer' }} checked={allSelected} onChange={() => toggleSelectAllForCompany(group.items, allSelected)} />
-                    )}
-                 </div>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}><MapPin size={14} style={{ marginRight: '4px' }} />{group.company.region_name}</p>
+                  </div>
+                  {can('prospecting_assign') && (
+                    <input type="checkbox" style={{ width: '24px', height: '24px', cursor: 'pointer' }} checked={allSelected} onChange={() => toggleSelectAllForCompany(group.items, allSelected)} />
+                  )}
+                </div>
 
-                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Daftar Produk Urgen ({group.items.length}):</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {group.items.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem' }}>
-                           {can('prospecting_assign') && (
-                             <input type="checkbox" checked={selectedInstIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
-                           )}
-                           <span style={{ flex: 1, fontWeight: 500 }}>{item.product_name}</span>
-                           <span style={{ color: item.diffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
-                              {item.diffDays < 0 ? `Lapsed ${Math.abs(item.diffDays)}d` : `H - ${item.diffDays}`}
-                           </span>
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Daftar Produk Urgen ({group.items.length}):</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {group.items.map(item => (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.85rem' }}>
+                        {can('prospecting_assign') && (
+                          <input type="checkbox" style={{ marginTop: '3px' }} checked={selectedInstIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{item.product_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Visit: <strong style={{ color: item.visit_schedule_date ? '#0369a1' : '#94a3b8' }}>{item.visit_schedule_date || '-'}</strong>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                 </div>
+                        <span style={{ color: item.diffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {item.diffDays < 0 ? `Lapsed ${Math.abs(item.diffDays)}d` : `H - ${item.diffDays}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                       PIC Saat Ini: <strong style={{ color: '#0369a1' }}>{group.items[0]?.assigned_to_name || 'Unassigned'}</strong>
-                    </div>
-                    <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setModalCompany(group)}>
-                       Lihat Detail
-                    </button>
-                 </div>
+                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    PIC Saat Ini: <strong style={{ color: '#0369a1' }}>{picSummary}</strong>
+                  </div>
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setModalCompany(group)}>
+                    Lihat Detail
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -2429,35 +2556,42 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
         <div className="modal-overlay" onClick={() => setAssignModalOpen(false)}>
           <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Berikan Jadwal Kunjungan</h2>
+              <h2>Atur Jadwal Kunjungan</h2>
               <button className="close-btn" onClick={() => setAssignModalOpen(false)}><X size={24} /></button>
             </div>
             <form onSubmit={handleBulkAssign}>
               <div className="modal-body">
-                <p style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>Anda akan menugaskan <strong>{selectedInstIds.length} item tugas</strong> kepada agent terpilih.</p>
-                
-                <div className="form-group">
-                  <label>Pilih Agent / Sales Team</label>
-                  <select required className="form-control" value={targetAgentId} onChange={e => setTargetAgentId(e.target.value)}>
-                    <option value="">-- Pilih Agent --</option>
-                    {teamMembers.map(u => <option key={u.id} value={u.id}>{u.username} ({u.role_name})</option>)}
-                  </select>
-                </div>
+                <p style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>Anda akan menjadwalkan <strong>{selectedInstIds.length} item tugas</strong>. </p>
 
                 <div className="form-group">
-                  <label>Tentukan Tanggal Kunjungan (Opsional)</label>
-                  <input type="date" className="form-control" value={visitDate} onChange={e => setVisitDate(e.target.value)} />
+                  <label>Tentukan Tanggal Kunjungan</label>
+                  <input required type="date" className="form-control" value={visitDate} onChange={e => setVisitDate(e.target.value)} />
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setAssignModalOpen(false)}>Batal</button>
                 <button type="submit" className="btn btn-primary" disabled={isAssigning}>
-                  {isAssigning ? 'Memproses...' : 'Konfirmasi & Kirim Jadwal'}
+                  {isAssigning ? 'Memproses...' : 'Konfirmasi Jadwal'}
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {modalCompany && (
+        <CompanyProductsModal
+          company={modalCompany.company}
+          title="Detail Target Follow-up / Penggantian"
+          items={modalCompany.items}
+          onClose={() => setModalCompany(null)}
+          renderAction={(item) => (
+            <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5 }}>
+              <div>PIC: <strong style={{ color: '#0369a1' }}>{item.assigned_to_name || 'Unassigned'}</strong></div>
+              <div>Visit: <strong style={{ color: item.visit_schedule_date ? '#0369a1' : '#94a3b8' }}>{item.visit_schedule_date || '-'}</strong></div>
+            </div>
+          )}
+        />
       )}
     </div>
   );
@@ -2469,7 +2603,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
   const [regionSearch, setRegionSearch] = useState('');
   const [filterCompanies, setFilterCompanies] = useState([]);
   const [companySearch, setCompanySearch] = useState('');
-  
+
 
   // --- Renew Modal State ---
   const [renewModalOpen, setRenewModalOpen] = useState(false);
@@ -2483,16 +2617,16 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
     newProductName: '', newInstallDate: '', newReplacementDate: '', newCycleValue: '1', newCycleUnit: 'years', renewNotes: ''
   });
 
-  if (!can('workorder_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1></div>;
+  if (!can('workorder_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   const filteredData = installations.filter(i => {
     if (i.is_history || Number(i.is_history) === 1) return false;
-    
+
     if (filterCompanies.length > 0 && !filterCompanies.includes(String(i.company_id))) return false;
 
     if (lifecycleFilter === 'URGENT') {
-       const diffDays = Math.ceil((new Date(i.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-       if (diffDays > 30 || i.status === 'Done') return false;
+      const diffDays = Math.ceil((new Date(i.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 30 || i.status === 'Done') return false;
     }
     return true;
   });
@@ -2502,8 +2636,8 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       const hasShowAll = can('workorder_showall');
       const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
-      if(jsonL.status === 'success') setInstallations(jsonL.data);
-    } catch(e) { console.error(e); }
+      if (jsonL.status === 'success') setInstallations(jsonL.data);
+    } catch (e) { console.error(e); }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -2514,10 +2648,10 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
         body: JSON.stringify({ id, status: newStatus, user_id: currentUser.id })
       });
       const d = await res.json();
-      if(d.status === 'success') {
-         setInstallations(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
+      if (d.status === 'success') {
+        setInstallations(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
       }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
   const updateNotes = async (id, newNotes) => {
@@ -2528,37 +2662,20 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
         body: JSON.stringify({ id, notes: newNotes, user_id: currentUser.id })
       });
       const d = await res.json();
-      if(d.status === 'success') {
-         setInstallations(prev => prev.map(i => i.id === id ? { ...i, notes: newNotes } : i));
+      if (d.status === 'success') {
+        setInstallations(prev => prev.map(i => i.id === id ? { ...i, notes: newNotes } : i));
       }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
-  const getLocalDateString = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `--`;
-};
 
-const calculateNextDate = (currentDate, value, unit) => {
-    if (!currentDate || !value) return currentDate;
-    const date = new Date(currentDate);
-    const val = parseInt(value);
-    if (unit === 'days') date.setDate(date.getDate() + val);
-    else if (unit === 'months') date.setMonth(date.getMonth() + val);
-    else if (unit === 'years') date.setFullYear(date.getFullYear() + val);
-    return date.toISOString().split('T')[0];
-  };
-
-  // --- Open Renew Modal ---
+  // --- Open Renew Form ---
   const openRenewForm = (id) => {
     const current = installations.find(i => String(i.id) === String(id));
     if (!current) return;
     let baseDate = current.replacement_date;
     if (new Date(baseDate) < new Date(new Date().toDateString())) {
-       baseDate = getLocalDateString();
+      baseDate = getLocalDateString();
     }
     const cycleUnit = current.maintenance_cycle_unit?.toLowerCase() || 'years';
     const cycleVal = current.maintenance_cycle_value || '1';
@@ -2614,64 +2731,78 @@ const calculateNextDate = (currentDate, value, unit) => {
         })
       });
       const d = await res.json();
-      if(d.status === 'success') {
-        setRenewStatusMsg('âœ… Perpanjangan berhasil! Siklus baru telah dibuat.');
+      if (d.status === 'success') {
+        setRenewStatusMsg('✅ Perpanjangan berhasil! Siklus baru telah dibuat.');
         await reloadInstallations();
         setTimeout(() => { setRenewModalOpen(false); setRenewStatusMsg(null); }, 1800);
       } else {
-        setRenewStatusMsg('âŒ ' + d.message);
+        setRenewStatusMsg('❌ ' + d.message);
       }
-    } catch(e) {
-      setRenewStatusMsg('âŒ Gagal menghubungi server.');
+    } catch (e) {
+      setRenewStatusMsg('❌ Gagal menghubungi server.');
       console.error(e);
     } finally { setRenewSaving(false); }
   };
 
   const columns = [
-    { header: 'Company', accessor: 'company_name', render: (row) => (
-      <div>
-        <div style={{ fontWeight: 600 }}>{row.company_name}</div>
-        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.region}</div>
-      </div>
-    )},
-    { header: 'Produk/Item', accessor: 'product_name', render: (row) => (
-      <div>
-        <div style={{ fontWeight: 500 }}>{row.product_name}</div>
-        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Recurring: {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</div>
-      </div>
-    )},
+    {
+      header: 'Company', accessor: 'company_name', render: (row) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{row.company_name}</div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.region}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Produk/Item', accessor: 'product_name', render: (row) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{row.product_name}</div>
+          <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Recurring: {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</div>
+        </div>
+      )
+    },
     { header: 'Tgl Pasang', accessor: 'installation_date' },
-    { header: 'Target Ganti', accessor: 'replacement_date', render: (row) => {
-       const diffDays = Math.ceil((new Date(row.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-       return (
-         <div style={{ color: diffDays <= 7 ? '#ef4444' : diffDays <= 30 ? '#f59e0b' : 'inherit' }}>
-           <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
-           <div style={{ fontSize: '0.75rem' }}>{diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}</div>
-         </div>
-       );
-    }},
-    { header: 'Status', accessor: 'status', render: (row) => (
-       <select className="form-control" style={{ width: '130px', padding: '4px', fontSize: '0.75rem' }} value={row.status} onChange={(e) => updateStatus(row.id, e.target.value)}>
-         {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
-       </select>
-    )},
-    { header: 'Notes', render: (row) => (
-      <textarea className="form-control" style={{ fontSize: '0.7rem', height: '40px', minWidth: '120px' }} value={row.notes || ''} onChange={(e) => updateNotes(row.id, e.target.value)} placeholder="Catatan..." />
-    )},
-    { header: 'PIC Sales', render: (row) => (
-      <div style={{ fontSize: '11px' }}>
-        <div style={{ fontWeight: 600, color: '#0369a1' }}>{row.assigned_to_name || '-'}</div>
-        <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>Oleh: {row.creator_name || '-'}</div>
-      </div>
-    )},
-    { header: 'Aksi', render: (row) => (
-       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-         <button className="btn btn-primary" style={{ padding: '5px 10px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => openRenewForm(row.id)}>ðŸ”„ Renew</button>
-         {(can('installation_transfer') || can('installation_update')) && (
-           <button className="btn" style={{ padding: '5px 10px', fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name }); setTransferOpen(true); }}>ðŸ”€ Transfer</button>
-         )}
-       </div>
-    )}
+    {
+      header: 'Target Ganti', accessor: 'replacement_date', render: (row) => {
+        const diffDays = Math.ceil((new Date(row.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
+        return (
+          <div style={{ color: diffDays <= 7 ? '#ef4444' : diffDays <= 30 ? '#f59e0b' : 'inherit' }}>
+            <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
+            <div style={{ fontSize: '0.75rem' }}>{diffDays < 0 ? `Terlewat ${Math.abs(diffDays)} hari!` : diffDays === 0 ? 'HARI INI!' : `H - ${diffDays}`}</div>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Status', accessor: 'status', render: (row) => (
+        <select className="form-control" style={{ width: '130px', padding: '4px', fontSize: '0.75rem' }} value={row.status} onChange={(e) => updateStatus(row.id, e.target.value)}>
+          {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
+        </select>
+      )
+    },
+    {
+      header: 'Notes', render: (row) => (
+        <textarea className="form-control" style={{ fontSize: '0.7rem', height: '40px', minWidth: '120px' }} value={row.notes || ''} onChange={(e) => updateNotes(row.id, e.target.value)} placeholder="Catatan..." />
+      )
+    },
+    {
+      header: 'PIC Sales', render: (row) => (
+        <div style={{ fontSize: '11px' }}>
+          <div style={{ fontWeight: 600, color: '#0369a1' }}>{row.assigned_to_name || '-'}</div>
+          <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>Oleh: {row.creator_name || '-'}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Aksi', render: (row) => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" style={{ padding: '5px 10px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => openRenewForm(row.id)}>🔄 Renew</button>
+          {(can('installation_transfer') || can('installation_update')) && (
+            <button className="btn" style={{ padding: '5px 10px', fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>
+          )}
+        </div>
+      )
+    }
   ];
 
   // Determine current data scope indicator
@@ -2695,10 +2826,10 @@ const calculateNextDate = (currentDate, value, unit) => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          
+
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
-            <button className={`btn ${lifecycleFilter === 'ALL' ? 'btn-primary' : ''}`} style={lifecycleFilter === 'ALL' ? { fontSize: '12px', padding: '6px 12px' } : {background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none', fontSize: '12px', padding: '6px 12px'}} onClick={() => setLifecycleFilter('ALL')}>Semua</button>
-            <button className={`btn ${lifecycleFilter === 'URGENT' ? 'btn-primary' : ''}`} style={lifecycleFilter === 'URGENT' ? {background: '#ef4444', fontSize: '12px', padding: '6px 12px'} : {background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none', fontSize: '12px', padding: '6px 12px'}} onClick={() => setLifecycleFilter('URGENT')}>Akan Habis</button>
+            <button className={`btn ${lifecycleFilter === 'ALL' ? 'btn-primary' : ''}`} style={lifecycleFilter === 'ALL' ? { fontSize: '12px', padding: '6px 12px' } : { background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none', fontSize: '12px', padding: '6px 12px' }} onClick={() => setLifecycleFilter('ALL')}>Semua</button>
+            <button className={`btn ${lifecycleFilter === 'URGENT' ? 'btn-primary' : ''}`} style={lifecycleFilter === 'URGENT' ? { background: '#ef4444', fontSize: '12px', padding: '6px 12px' } : { background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none', fontSize: '12px', padding: '6px 12px' }} onClick={() => setLifecycleFilter('URGENT')}>Akan Habis</button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
@@ -2709,7 +2840,7 @@ const calculateNextDate = (currentDate, value, unit) => {
                 return (
                   <span key={cid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
                     {c?.name || cid}
-                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12}/></button>
+                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
                   </span>
                 );
               })}
@@ -2717,7 +2848,7 @@ const calculateNextDate = (currentDate, value, unit) => {
             <input list="wo-company-list" className="form-control" style={{ border: 'none', padding: '4px', fontSize: '13px', width: '130px' }} placeholder="Filter Company..." value={companySearch} onChange={e => {
               setCompanySearch(e.target.value);
               const found = companies.find(c => c.name.toLowerCase() === e.target.value.toLowerCase());
-              if(found && !filterCompanies.includes(String(found.id))) { setFilterCompanies([...filterCompanies, String(found.id)]); setCompanySearch(''); }
+              if (found && !filterCompanies.includes(String(found.id))) { setFilterCompanies([...filterCompanies, String(found.id)]); setCompanySearch(''); }
             }} />
             <datalist id="wo-company-list">{companies.map(c => <option key={c.id} value={c.name} />)}</datalist>
           </div>
@@ -2737,7 +2868,7 @@ const calculateNextDate = (currentDate, value, unit) => {
           <div className="modal-content" style={{ maxWidth: '640px', width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>ðŸ”„ Form Perpanjangan (Renew)</h2>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>🔄 Form Perpanjangan (Renew)</h2>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>{renewForm.companyName}</div>
               </div>
               <button className="close-btn" onClick={() => setRenewModalOpen(false)}><X size={24} /></button>
@@ -2746,7 +2877,7 @@ const calculateNextDate = (currentDate, value, unit) => {
               <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
                 {/* Current Info Summary */}
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>ðŸ“‹ Data Siklus Saat Ini (Akan diarsipkan)</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>📋 Data Siklus Saat Ini (Akan diarsipkan)</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div style={{ fontSize: '0.85rem' }}><span style={{ color: '#94a3b8' }}>Produk:</span> <strong>{renewForm.currentProductName}</strong></div>
                     <div style={{ fontSize: '0.85rem' }}><span style={{ color: '#94a3b8' }}>Tgl Pasang:</span> <strong>{renewForm.currentInstallDate}</strong></div>
@@ -2757,8 +2888,8 @@ const calculateNextDate = (currentDate, value, unit) => {
 
                 {/* New Cycle Form */}
                 <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #bae6fd', borderRadius: '10px', padding: '20px' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>ðŸ†• Data Siklus Baru</div>
-                  
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>🆕 Data Siklus Baru</div>
+
                   <div className="form-group" style={{ marginBottom: '14px' }}>
                     <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Nama Produk (Siklus Baru)</label>
                     <input required className="form-control" type="text" value={renewForm.newProductName} onChange={e => updateRenewField('newProductName', e.target.value)} placeholder="Nama produk baru atau tetap sama" />
@@ -2777,7 +2908,7 @@ const calculateNextDate = (currentDate, value, unit) => {
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'white', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0369a1', whiteSpace: 'nowrap' }}>â± Siklus Recurring:</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0369a1', whiteSpace: 'nowrap' }}>⏲ Siklus Recurring:</span>
                     <input type="number" min="1" required className="form-control" style={{ width: '80px', padding: '6px' }} value={renewForm.newCycleValue} onChange={e => updateRenewField('newCycleValue', e.target.value)} />
                     <select className="form-control" style={{ width: '120px', padding: '6px' }} value={renewForm.newCycleUnit} onChange={e => updateRenewField('newCycleUnit', e.target.value)}>
                       <option value="days">Hari</option>
@@ -2793,7 +2924,7 @@ const calculateNextDate = (currentDate, value, unit) => {
                 </div>
 
                 {renewStatusMsg && (
-                  <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: renewStatusMsg.startsWith('âœ…') ? '#ecfdf5' : '#fef2f2', color: renewStatusMsg.startsWith('âœ…') ? '#059669' : '#dc2626', fontSize: '0.875rem', fontWeight: 500, border: `1px solid ${renewStatusMsg.startsWith('âœ…') ? '#86efac' : '#fecaca'}` }}>
+                  <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: renewStatusMsg.startsWith('✅') ? '#ecfdf5' : '#fef2f2', color: renewStatusMsg.startsWith('✅') ? '#059669' : '#dc2626', fontSize: '0.875rem', fontWeight: 500, border: `1px solid ${renewStatusMsg.startsWith('✅') ? '#86efac' : '#fecaca'}` }}>
                     {renewStatusMsg}
                   </div>
                 )}
@@ -2801,7 +2932,7 @@ const calculateNextDate = (currentDate, value, unit) => {
               <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setRenewModalOpen(false)}>Batal</button>
                 <button type="submit" className="btn btn-primary" disabled={renewSaving} style={{ background: '#10b981', minWidth: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  {renewSaving ? <><Loader2 size={16} className="spin" /> Memproses...</> : 'ðŸ”„ Perpanjang Siklus'}
+                  {renewSaving ? <><Loader2 size={16} className="spin" /> Memproses...</> : '🔄 Perpanjang Siklus'}
                 </button>
               </div>
             </form>
@@ -2832,7 +2963,7 @@ function HistoryPage({ installations, companies, can, regions }) {
 
   useEffect(() => { setCurrentPage(1); }, [search, filterRegion]);
 
-  if (!can('history_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
+  if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
 
   const historicalGroups = useMemo(() => {
     const list = installations.filter(i => {
@@ -2851,8 +2982,8 @@ function HistoryPage({ installations, companies, can, regions }) {
       if (!groups[i.company_id]) groups[i.company_id] = { company: comp, items: [] };
       groups[i.company_id].items.push(i);
     });
-    
-    return Object.values(groups).sort((a,b) => b.items.length - a.items.length);
+
+    return Object.values(groups).sort((a, b) => b.items.length - a.items.length);
   }, [installations, companies, search, filterRegion]);
 
   const currentData = historicalGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -2863,53 +2994,53 @@ function HistoryPage({ installations, companies, can, regions }) {
       <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Modul khusus menampilkan kumpulan log audit produk terdahulu yang sudah digantikan / diperpanjang (*Historical records*).</p>
       <div className="card-view">
         <div className="card-header" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <input type="text" placeholder="Search product or company..." className="search-input" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: '200px' }} />
-            <select className="form-control" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
-              <option value="">Semua Wilayah</option>
-              {REGION_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
-            </select>
+          <input type="text" placeholder="Search product or company..." className="search-input" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: '200px' }} />
+          <select className="form-control" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
+            <option value="">Semua Wilayah</option>
+            {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
+          </select>
         </div>
         <table className="data-table">
           <thead>
             <tr>
-               <th>Perusahaan</th>
-               <th>Region</th>
-               <th>Catatan Detail Histori Produk</th>
+              <th>Perusahaan</th>
+              <th>Region</th>
+              <th>Catatan Detail Histori Produk</th>
             </tr>
           </thead>
           <tbody>
-             {currentData.map(group => {
-               const displayItems = group.items.slice(0, 5);
-               return (
-                 <tr key={group.company.id}>
-                   <td style={{ fontWeight: 600, verticalAlign: 'top' }}>{group.company.name}</td>
-                   <td style={{ verticalAlign: 'top' }}>{group.company.region_name}</td>
-                   <td style={{ verticalAlign: 'top' }}>
-                      <div style={{ fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>{group.items.length} Record Terarsip</div>
-                      <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                         {displayItems.map(item => (
-                           <li key={item.id}>
-                              <strong>{item.productName}</strong> <br/>
-                              <span style={{color: 'var(--text-muted)'}}>Diganti Pada: {item.replacementDate}</span>
-                              {item.auditLogs && item.auditLogs.length > 0 && (
-                                 <div style={{ fontSize: '0.75rem', fontStyle: 'italic', marginTop: '2px', color: '#94a3b8' }}>Log: {item.auditLogs.map(l => l.action).join(', ')}</div>
-                              )}
-                           </li>
-                         ))}
-                      </ul>
-                      {group.items.length > 5 && (
-                         <div style={{ marginTop: '12px' }}>
-                           <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600, color: '#0ea5e9', borderColor: '#bae6fd' }} onClick={() => setModalCompany(group)}>
-                             <Archive size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                             Lihat {group.items.length - 5} riwayat history lainnya (Pop-up Mode)
-                           </button>
-                         </div>
-                      )}
-                   </td>
-                 </tr>
-               );
-             })}
-             {currentData.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', color: 'gray' }}>Belum ada data history perpanjangan.</td></tr>}
+            {currentData.map(group => {
+              const displayItems = group.items.slice(0, 5);
+              return (
+                <tr key={group.company.id}>
+                  <td style={{ fontWeight: 600, verticalAlign: 'top' }}>{group.company.name}</td>
+                  <td style={{ verticalAlign: 'top' }}>{group.company.region_name}</td>
+                  <td style={{ verticalAlign: 'top' }}>
+                    <div style={{ fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>{group.items.length} Record Terarsip</div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {displayItems.map(item => (
+                        <li key={item.id}>
+                          <strong>{item.productName}</strong> <br />
+                          <span style={{ color: 'var(--text-muted)' }}>Diganti Pada: {item.replacementDate}</span>
+                          {item.auditLogs && item.auditLogs.length > 0 && (
+                            <div style={{ fontSize: '0.75rem', fontStyle: 'italic', marginTop: '2px', color: '#94a3b8' }}>Log: {item.auditLogs.map(l => l.action).join(', ')}</div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {group.items.length > 5 && (
+                      <div style={{ marginTop: '12px' }}>
+                        <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600, color: '#0ea5e9', borderColor: '#bae6fd' }} onClick={() => setModalCompany(group)}>
+                          <Archive size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                          Lihat {group.items.length - 5} riwayat history lainnya (Pop-up Mode)
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {currentData.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', color: 'gray' }}>Belum ada data history perpanjangan.</td></tr>}
           </tbody>
         </table>
         <Pagination totalItems={historicalGroups.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
@@ -2917,20 +3048,20 @@ function HistoryPage({ installations, companies, can, regions }) {
 
       {modalCompany && (
         <CompanyProductsModal
-           company={modalCompany.company}
-           title="Seluruh Log Historical Products"
-           items={modalCompany.items}
-           onClose={() => setModalCompany(null)}
-           renderAction={(item) => (
-             <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                {(!item.auditLogs || item.auditLogs.length === 0) ? <em>Tidak ada log detail</em> : item.auditLogs.map((l, idx) => (
-                   <div key={idx} style={{ marginBottom: '4px' }}>
-                     <strong>[{l.date}]</strong> <br/>
-                     <span style={{ color: '#0ea5e9' }}>{l.action}</span> (User: {l.user})
-                   </div>
-                ))}
-             </div>
-           )}
+          company={modalCompany.company}
+          title="Seluruh Log Historical Products"
+          items={modalCompany.items}
+          onClose={() => setModalCompany(null)}
+          renderAction={(item) => (
+            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+              {(!item.auditLogs || item.auditLogs.length === 0) ? <em>Tidak ada log detail</em> : item.auditLogs.map((l, idx) => (
+                <div key={idx} style={{ marginBottom: '4px' }}>
+                  <strong>[{l.date}]</strong> <br />
+                  <span style={{ color: '#0ea5e9' }}>{l.action}</span> (User: {l.user})
+                </div>
+              ))}
+            </div>
+          )}
         />
       )}
     </div>
@@ -2943,7 +3074,7 @@ function UserPage({ can, currentUser }) {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
-  const [formData, setFormData] = useState({ id:'', username:'', email:'', phone:'', password:'', confirmPassword:'', role_id:'3', status:'active' });
+  const [formData, setFormData] = useState({ id: '', username: '', email: '', phone: '', password: '', confirmPassword: '', role_id: '3', status: 'active' });
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
   const [statusType, setStatusType] = useState('');
@@ -2960,93 +3091,95 @@ function UserPage({ can, currentUser }) {
       const jU = await resU.json(); const jR = await resR.json();
       if (jU.status === 'success') setUsersInfo(jU.data);
       if (jR.status === 'success') setRolesInfo(jR.data);
-    } catch(e) { console.error(e); } finally { setIsLoadingData(false); }
+    } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  const openEdit = (u) => { setIsEdit(true); setFormData({id:u.id, username:u.username, email:u.email, phone:u.phone||'', password:'', confirmPassword:'', role_id:String(u.role_id), status:u.status}); setStatusMsg(null); setModalOpen(true); };
-  const openCreate = () => { setIsEdit(false); setFormData({id:'', username:'', email:'', phone:'', password:'', confirmPassword:'', role_id:'3', status:'active'}); setStatusMsg(null); setModalOpen(true); };
+  const openEdit = (u) => { setIsEdit(true); setFormData({ id: u.id, username: u.username, email: u.email, phone: u.phone || '', password: '', confirmPassword: '', role_id: String(u.role_id), status: u.status }); setStatusMsg(null); setModalOpen(true); };
+  const openCreate = () => { setIsEdit(false); setFormData({ id: '', username: '', email: '', phone: '', password: '', confirmPassword: '', role_id: '3', status: 'active' }); setStatusMsg(null); setModalOpen(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setStatusMsg(null);
-    if(!isEdit && formData.password!==formData.confirmPassword) { setStatusType('error'); setStatusMsg('Konfirmasi sandi tidak cocok.'); return; }
+    if (!isEdit && formData.password !== formData.confirmPassword) { setStatusType('error'); setStatusMsg('Konfirmasi sandi tidak cocok.'); return; }
     setIsLoading(true);
     try {
       const ep = isEdit ? `${import.meta.env.VITE_API_URL}/users.php?action=update` : `${import.meta.env.VITE_API_URL}/auth.php?action=register`;
-      const res = await fetch(ep, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...formData, user_id: currentUser.id })});
+      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...formData, user_id: currentUser.id }) });
       const d = await res.json();
-      if(d.status==='success') { setStatusType('success'); setStatusMsg(d.message); fetchData(); setTimeout(()=>setModalOpen(false),1000); }
+      if (d.status === 'success') { setStatusType('success'); setStatusMsg(d.message); fetchData(); setTimeout(() => setModalOpen(false), 1000); }
       else { setStatusType('error'); setStatusMsg(d.message); }
-    } catch(err) { setStatusType('error'); setStatusMsg('Kesalahan Jaringan API.'); } finally { setIsLoading(false); }
+    } catch (err) { setStatusType('error'); setStatusMsg('Kesalahan Jaringan API.'); } finally { setIsLoading(false); }
   };
 
   const handleDeactivate = async (u) => {
-    if(!window.confirm(`Nonaktifkan user "${u.username}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:u.id})}); const d=await r.json(); if(d.status==='success') fetchData(); } catch(e) {console.error(e);}
+    if (!window.confirm(`Nonaktifkan user "${u.username}"?`)) return;
+    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch (e) { console.error(e); }
   };
 
   const columns = [
     { header: 'ID', accessor: 'id' },
-    { header: 'Username', accessor: 'username', render: (u) => <strong style={{color: '#0f172a'}}>{u.username}</strong> },
+    { header: 'Username', accessor: 'username', render: (u) => <strong style={{ color: '#0f172a' }}>{u.username}</strong> },
     { header: 'Email', accessor: 'email' },
     { header: 'Phone', accessor: 'phone', render: (u) => u.phone || '-' },
-    { header: 'Role', accessor: 'role_name', render: (u) => <span className={`badge ${u.role_name==='Admin'?'badge-info':'badge-warning'}`}>{u.role_name}</span> },
-    { header: 'Pencipta', accessor: 'creator_name', render: (u) => <span style={{fontSize: '12px', color: '#64748b'}}>{u.creator_name || 'System'}</span> },
+    { header: 'Role', accessor: 'role_name', render: (u) => <span className={`badge ${u.role_name === 'Admin' ? 'badge-info' : 'badge-warning'}`}>{u.role_name}</span> },
+    { header: 'Pencipta', accessor: 'creator_name', render: (u) => <span style={{ fontSize: '12px', color: '#64748b' }}>{u.creator_name || 'System'}</span> },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
-    { header: 'Status', accessor: 'status', render: (u) => <span className={`badge ${u.status==='active'?'badge-success':'badge-danger'}`}>{u.status==='active'?'Aktif':u.status}</span> },
-    { header: 'Aksi', render: (u) => (
-      <div style={{display:'flex', gap:'6px'}}>
-        {can('user_update') && <button className="btn btn-secondary" style={{padding:'4px 8px', fontSize:'12px'}} onClick={()=>openEdit(u)}>Edit</button>}
-        {can('user_delete') && u.status==='active' && <button className="btn" style={{padding:'4px 8px', fontSize:'12px', background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca'}} onClick={()=>handleDeactivate(u)}>Nonaktifkan</button>}
-      </div>
-    )}
+    { header: 'Status', accessor: 'status', render: (u) => <span className={`badge ${u.status === 'active' ? 'badge-success' : 'badge-danger'}`}>{u.status === 'active' ? 'Aktif' : u.status}</span> },
+    {
+      header: 'Aksi', render: (u) => (
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {can('user_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => openEdit(u)}>Edit</button>}
+          {can('user_delete') && u.status === 'active' && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDeactivate(u)}>Nonaktifkan</button>}
+        </div>
+      )
+    }
   ];
 
-  if(!isLoadingData && !can('user_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>user_read</code> untuk halaman ini.</p></div>;
+  if (!isLoadingData && !can('user_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>user_read</code> untuk halaman ini.</p></div>;
 
   return (
     <div className="page-container">
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px', flexWrap:'wrap', gap:'12px'}}>
-        <h1 className="page-title" style={{margin:0}}>Master User / Pengguna Sistem</h1>
-        <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Master User / Pengguna Sistem</h1>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('user_create') && <button className="btn btn-primary" onClick={openCreate} style={{display:'flex', alignItems:'center', gap:'8px'}}><Plus size={18}/> Add New User</button>}
+          {can('user_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Add New User</button>}
         </div>
       </div>
-      
+
       <div className="card-view">
         {isLoadingData ? (
-          <div style={{textAlign:'center', padding:'40px'}}><Loader2 className="animate-spin" style={{margin:'0 auto'}} size={32} color="#0ea5e9"/></div>
+          <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
           <DataTable data={usersInfo.filter(u => showInactive || u.status === 'active')} columns={columns} fileName="master-users" />
         )}
       </div>
       {modalOpen && (
-        <div className="modal-overlay" onClick={()=>setModalOpen(false)}><div className="modal-content" style={{maxWidth:'520px'}} onClick={e=>e.stopPropagation()}>
-          <div className="modal-header"><h2>{isEdit?'Ubah Data User':'Registrasi User Baru'}</h2><button type="button" className="close-btn" onClick={()=>setModalOpen(false)}><X size={24}/></button></div>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header"><h2>{isEdit ? 'Ubah Data User' : 'Registrasi User Baru'}</h2><button type="button" className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSubmit}><div className="modal-body">
-            <div className="form-group"><label>Username</label><input required className="form-control" value={formData.username} onChange={e=>setFormData({...formData, username:e.target.value})} disabled={isEdit} placeholder="Username"/></div>
-            <div style={{display:'flex', gap:'16px'}}>
-              <div className="form-group" style={{flex:1}}><label>Email</label><input required className="form-control" type="email" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} disabled={isEdit}/></div>
-              <div className="form-group" style={{flex:1}}><label>Nomor Telepon</label><input className="form-control" value={formData.phone} onChange={e=>setFormData({...formData, phone:e.target.value})} placeholder="081234xxx"/></div>
+            <div className="form-group"><label>Username</label><input required className="form-control" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} disabled={isEdit} placeholder="Username" /></div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div className="form-group" style={{ flex: 1 }}><label>Email</label><input required className="form-control" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={isEdit} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Nomor Telepon</label><input className="form-control" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="081234xxx" /></div>
             </div>
-            {!isEdit && <div style={{display:'flex', gap:'16px'}}>
-              <div className="form-group" style={{flex:1}}><label>Kata Sandi</label><input required className="form-control" type="password" value={formData.password} onChange={e=>setFormData({...formData, password:e.target.value})}/></div>
-              <div className="form-group" style={{flex:1}}><label>Konfirmasi Sandi</label><input required className="form-control" type="password" value={formData.confirmPassword} onChange={e=>setFormData({...formData, confirmPassword:e.target.value})}/></div>
+            {!isEdit && <div style={{ display: 'flex', gap: '16px' }}>
+              <div className="form-group" style={{ flex: 1 }}><label>Kata Sandi</label><input required className="form-control" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Konfirmasi Sandi</label><input required className="form-control" type="password" value={formData.confirmPassword} onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })} /></div>
             </div>}
-            <div style={{display:'flex', gap:'16px'}}>
-              <div className="form-group" style={{flex:1}}><label>Role</label><select className="form-control" value={formData.role_id} onChange={e=>setFormData({...formData, role_id:e.target.value})}>{rolesInfo.map(r=><option key={r.id} value={r.id}>{r.role_name}</option>)}</select></div>
-              {isEdit && <div className="form-group" style={{flex:1}}><label>Status</label><select className="form-control" value={formData.status} onChange={e=>setFormData({...formData, status:e.target.value})}><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="resigned">Resigned</option></select></div>}
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div className="form-group" style={{ flex: 1 }}><label>Role</label><select className="form-control" value={formData.role_id} onChange={e => setFormData({ ...formData, role_id: e.target.value })}>{rolesInfo.map(r => <option key={r.id} value={r.id}>{r.role_name}</option>)}</select></div>
+              {isEdit && <div className="form-group" style={{ flex: 1 }}><label>Status</label><select className="form-control" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="resigned">Resigned</option></select></div>}
             </div>
-            {statusMsg && <div style={{marginTop:'12px', padding:'12px', borderRadius:'8px', display:'flex', alignItems:'center', gap:'8px', background:statusType==='success'?'#ecfdf5':'#fef2f2', color:statusType==='success'?'#059669':'#dc2626', borderLeft:statusType==='success'?'4px solid #10b981':'4px solid #ef4444'}}>{statusType==='success'?<CheckCircle2 size={18}/>:<AlertCircle size={18}/>} {statusMsg}</div>}
+            {statusMsg && <div style={{ marginTop: '12px', padding: '12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', background: statusType === 'success' ? '#ecfdf5' : '#fef2f2', color: statusType === 'success' ? '#059669' : '#dc2626', borderLeft: statusType === 'success' ? '4px solid #10b981' : '4px solid #ef4444' }}>{statusType === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />} {statusMsg}</div>}
           </div>
-          <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={()=>setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isLoading} style={{minWidth:'130px'}}>{isLoading?<Loader2 className="animate-spin" size={18} style={{margin:'0 auto'}}/>:(isEdit?'Ubah Data':'Simpan User')}</button></div>
+            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isLoading} style={{ minWidth: '130px' }}>{isLoading ? <Loader2 className="animate-spin" size={18} style={{ margin: '0 auto' }} /> : (isEdit ? 'Ubah Data' : 'Simpan User')}</button></div>
           </form></div></div>
       )}
     </div>
@@ -3058,7 +3191,7 @@ function RolePage({ can, currentUser }) {
   const [isLoading, setIsLoading] = useState(true);
   const [editModal, setEditModal] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
-  const [editForm, setEditForm] = useState({ id:'', role_name:'', description:'', status:'active' });
+  const [editForm, setEditForm] = useState({ id: '', role_name: '', description: '', status: 'active' });
   const [editSaving, setEditSaving] = useState(false);
   const [editStatus, setEditStatus] = useState(null);
   const [permModal, setPermModal] = useState(false);
@@ -3072,13 +3205,13 @@ function RolePage({ can, currentUser }) {
 
   const fetchRoles = async () => {
     setIsLoading(true);
-    try { 
+    try {
       const showAll = can('role_showall');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`); 
-      const json = await res.json(); 
-      if(json.status==='success') setRoles(json.data); 
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
+      const json = await res.json();
+      if (json.status === 'success') setRoles(json.data);
     }
-    catch(e) { console.error(e); } finally { setIsLoading(false); }
+    catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   useEffect(() => {
@@ -3086,139 +3219,157 @@ function RolePage({ can, currentUser }) {
   }, []);
 
 
-  const openEditRole = (r) => { setIsEdit(true); setEditForm({id:r.id, role_name:r.role_name, description:r.description||'', status:r.status||'active'}); setEditStatus(null); setEditModal(true); };
-  const openCreateRole = () => { setIsEdit(false); setEditForm({id:'', role_name:'', description:'', status:'active'}); setEditStatus(null); setEditModal(true); };
+  const openEditRole = (r) => { setIsEdit(true); setEditForm({ id: r.id, role_name: r.role_name, description: r.description || '', status: r.status || 'active' }); setEditStatus(null); setEditModal(true); };
+  const openCreateRole = () => { setIsEdit(false); setEditForm({ id: '', role_name: '', description: '', status: 'active' }); setEditStatus(null); setEditModal(true); };
 
   const handleEditSave = async (e) => {
     e.preventDefault(); setEditSaving(true); setEditStatus(null);
-    try { 
+    try {
       const action = isEdit ? 'update' : 'create';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ ...editForm, user_id: currentUser.id })}); 
-      const d=await res.json(); 
-      setEditStatus(d.message); 
-      if(d.status==='success'){fetchRoles(); setTimeout(()=>{setEditModal(false);setEditStatus(null);},1000);} 
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editForm, user_id: currentUser.id }) });
+      const d = await res.json();
+      setEditStatus(d.message);
+      if (d.status === 'success') { fetchRoles(); setTimeout(() => { setEditModal(false); setEditStatus(null); }, 1000); }
     }
-    catch(err){setEditStatus('Gagal menghubungi server.');} finally{setEditSaving(false);}
+    catch (err) { setEditStatus('Gagal menghubungi server.'); } finally { setEditSaving(false); }
   };
 
   const handleDeactivateRole = async (r) => {
-    if(!window.confirm(`Nonaktifkan role "${r.role_name}"?`)) return;
-    try { const res=await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:r.id})}); const d=await res.json(); if(d.status==='success') fetchRoles(); } catch(err){console.error(err);}
+    if (!window.confirm(`Nonaktifkan role "${r.role_name}"?`)) return;
+    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) }); const d = await res.json(); if (d.status === 'success') fetchRoles(); } catch (err) { console.error(err); }
   };
 
   const openPermissions = async (role) => {
     setPermRoleId(role.id); setPermRoleName(role.role_name); setPermStatus(null);
-    try { const res=await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json=await res.json(); if(json.status==='success'){setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number));} } catch(err){console.error(err);}
+    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json = await res.json(); if (json.status === 'success') { setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number)); } } catch (err) { console.error(err); }
     setPermModal(true);
   };
-  const togglePerm = (pid) => setAssignedPerms(prev=>prev.includes(pid)?prev.filter(x=>x!==pid):[...prev,pid]);
+  const togglePerm = (pid) => setAssignedPerms(prev => prev.includes(pid) ? prev.filter(x => x !== pid) : [...prev, pid]);
   const toggleGroup = (groupPerms) => {
-    const ids = groupPerms.map(p=>Number(p.id));
-    const allOn = ids.every(id=>assignedPerms.includes(id));
-    if(allOn) setAssignedPerms(prev=>prev.filter(x=>!ids.includes(x))); else setAssignedPerms(prev=>[...new Set([...prev,...ids])]);
+    const ids = groupPerms.map(p => Number(p.id));
+    const allOn = ids.every(id => assignedPerms.includes(id));
+    if (allOn) setAssignedPerms(prev => prev.filter(x => !ids.includes(x))); else setAssignedPerms(prev => [...new Set([...prev, ...ids])]);
   };
   const savePermissions = async () => {
     setPermSaving(true); setPermStatus(null);
-    try { const res=await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=save_permissions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role_id:permRoleId,permission_ids:assignedPerms})}); const json=await res.json(); setPermStatus(json.message); if(json.status==='success') setTimeout(()=>{setPermModal(false);setPermStatus(null);},1200); }
-    catch(err){setPermStatus('Gagal menghubungi server.');} finally{setPermSaving(false);}
+    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=save_permissions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role_id: permRoleId, permission_ids: assignedPerms }) }); const json = await res.json(); setPermStatus(json.message); if (json.status === 'success') setTimeout(() => { setPermModal(false); setPermStatus(null); }, 1200); }
+    catch (err) { setPermStatus('Gagal menghubungi server.'); } finally { setPermSaving(false); }
   };
+
+  const selectAllPermissions = () => {
+    const allIds = allPerms.map(p => Number(p.id));
+    setAssignedPerms(allIds);
+  };
+  const deselectAllPermissions = () => setAssignedPerms([]);
 
   const groupedPerms = useMemo(() => {
     const groups = {};
-    const labels = {user:'Master User',role:'Master Role',dashboard:'Dashboard',sales:'Instalasi / Sales',prospecting:'Prospecting',workorder:'Work Order',company:'Data Company',pic:'Data PIC',history:'History / Arsip',installation:'Data Instalasi'};
-    allPerms.forEach(p => { const prefix=p.permission_name.split('_')[0]; if(!groups[prefix]) groups[prefix]={label:labels[prefix]||prefix, perms:[]}; groups[prefix].perms.push(p); });
+    const labels = { user: 'Master User', role: 'Master Role', team: 'Master Team', dashboard: 'Dashboard', sales: 'Instalasi / Sales', prospecting: 'Prospecting', workorder: 'Work Order', company: 'Data Company', pic: 'Data PIC', history: 'History / Arsip', installation: 'Data Instalasi' };
+    allPerms.forEach(p => { const prefix = p.permission_name.split('_')[0]; if (!groups[prefix]) groups[prefix] = { label: labels[prefix] || prefix, perms: [] }; groups[prefix].perms.push(p); });
     return groups;
   }, [allPerms]);
 
   const columns = [
-    { header: 'ID', accessor: 'id', render: (r) => <span style={{fontWeight:'bold'}}>ROL-00{r.id}</span> },
+    { header: 'ID', accessor: 'id', render: (r) => <span style={{ fontWeight: 'bold' }}>ROL-00{r.id}</span> },
     { header: 'Nama Role', accessor: 'role_name', render: (r) => <span className="badge badge-info">{r.role_name}</span> },
     { header: 'Deskripsi', accessor: 'description' },
-    { header: 'Pencipta', accessor: 'creator_name', render: (r) => <span style={{fontSize: '12px', color: '#64748b'}}>{r.creator_name || 'System'}</span> },
+    { header: 'Pencipta', accessor: 'creator_name', render: (r) => <span style={{ fontSize: '12px', color: '#64748b' }}>{r.creator_name || 'System'}</span> },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
-    { header: 'Status', accessor: 'status', render: (r) => <span className={`badge ${(r.status||'active')==='active'?'badge-success':'badge-danger'}`}>{(r.status||'active')==='active'?'Aktif':'Nonaktif'}</span> },
-    { header: 'Aksi', render: (r) => (
-      <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-        {can('role_set_authority') && <button className="btn btn-primary" style={{padding:'4px 10px',fontSize:'12px'}} onClick={()=>openPermissions(r)}><Lock size={14} style={{display:'inline',verticalAlign:'middle',marginRight:'4px'}}/>Otoritas</button>}
-        {can('role_update') && <button className="btn btn-secondary" style={{padding:'4px 10px',fontSize:'12px'}} onClick={()=>openEditRole(r)}>Edit</button>}
-        {can('role_delete') && (r.status||'active')==='active' && <button className="btn" style={{padding:'4px 8px',fontSize:'12px',background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca'}} onClick={()=>handleDeactivateRole(r)}>Nonaktifkan</button>}
-      </div>
-    )}
+    { header: 'Status', accessor: 'status', render: (r) => <span className={`badge ${(r.status || 'active') === 'active' ? 'badge-success' : 'badge-danger'}`}>{(r.status || 'active') === 'active' ? 'Aktif' : 'Nonaktif'}</span> },
+    {
+      header: 'Aksi', render: (r) => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {can('role_set_authority') && <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => openPermissions(r)}><Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Otoritas</button>}
+          {can('role_update') && <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => openEditRole(r)}>Edit</button>}
+          {can('role_delete') && (r.status || 'active') === 'active' && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDeactivateRole(r)}>Nonaktifkan</button>}
+        </div>
+      )
+    }
   ];
 
-  if(!isLoading && !can('role_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>role_read</code> untuk halaman ini.</p></div>;
+  if (!isLoading && !can('role_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>role_read</code> untuk halaman ini.</p></div>;
 
   return (
     <div className="page-container">
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px', flexWrap:'wrap', gap:'12px'}}>
-        <h1 className="page-title" style={{margin:0}}>Master Role / Peran Jabatan</h1>
-        <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Master Role / Peran Jabatan</h1>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('role_create') && <button className="btn btn-primary" onClick={openCreateRole} style={{display:'flex', alignItems:'center', gap:'8px'}}><Plus size={18}/> Tambah Role</button>}
+          {can('role_create') && <button className="btn btn-primary" onClick={openCreateRole} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Tambah Role</button>}
         </div>
       </div>
-      
+
       <div className="card-view">
         {isLoading ? (
-          <div style={{textAlign:'center', padding:'40px'}}><Loader2 className="animate-spin" style={{margin:'0 auto'}} size={32} color="#0ea5e9"/></div>
+          <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
           <DataTable data={roles.filter(r => showInactive || (r.status || 'active') === 'active')} columns={columns} fileName="master-roles" />
         )}
       </div>
 
       {editModal && (
-        <div className="modal-overlay" onClick={()=>setEditModal(false)}><div className="modal-content" style={{maxWidth:'450px'}} onClick={e=>e.stopPropagation()}>
-          <div className="modal-header"><h2>{isEdit ? 'Edit Role' : 'Tambah Role Baru'}</h2><button className="close-btn" onClick={()=>setEditModal(false)}><X size={24}/></button></div>
+        <div className="modal-overlay" onClick={() => setEditModal(false)}><div className="modal-content" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header"><h2>{isEdit ? 'Edit Role' : 'Tambah Role Baru'}</h2><button className="close-btn" onClick={() => setEditModal(false)}><X size={24} /></button></div>
           <form onSubmit={handleEditSave}><div className="modal-body">
-            <div className="form-group"><label>Nama Role</label><input required className="form-control" value={editForm.role_name} onChange={e=>setEditForm({...editForm,role_name:e.target.value})}/></div>
-            <div className="form-group"><label>Deskripsi</label><input className="form-control" value={editForm.description} onChange={e=>setEditForm({...editForm,description:e.target.value})}/></div>
-            {isEdit && <div className="form-group"><label>Status</label><select className="form-control" value={editForm.status} onChange={e=>setEditForm({...editForm,status:e.target.value})}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></div>}
-            {editStatus && <div style={{marginTop:'12px',padding:'8px 12px',borderRadius:'6px',background:'#ecfdf5',color:'#059669',fontSize:'13px'}}>{editStatus}</div>}
-          </div><div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={()=>setEditModal(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={editSaving}>{editSaving?'Menyimpan...':(isEdit ? 'Simpan' : 'Buat Role')}</button></div></form>
+            <div className="form-group"><label>Nama Role</label><input required className="form-control" value={editForm.role_name} onChange={e => setEditForm({ ...editForm, role_name: e.target.value })} /></div>
+            <div className="form-group"><label>Deskripsi</label><input className="form-control" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} /></div>
+            {isEdit && <div className="form-group"><label>Status</label><select className="form-control" value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></div>}
+            {editStatus && <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '6px', background: '#ecfdf5', color: '#059669', fontSize: '13px' }}>{editStatus}</div>}
+          </div><div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setEditModal(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={editSaving}>{editSaving ? 'Menyimpan...' : (isEdit ? 'Simpan' : 'Buat Role')}</button></div></form>
         </div></div>
       )}
 
       {permModal && (
-        <div className="modal-overlay" onClick={()=>setPermModal(false)}><div className="modal-content" style={{maxWidth:'700px'}} onClick={e=>e.stopPropagation()}>
-          <div className="modal-header"><h2>Pengaturan Otoritas: <span style={{color:'#0ea5e9'}}>{permRoleName}</span></h2><button className="close-btn" onClick={()=>setPermModal(false)}><X size={24}/></button></div>
-          <div className="modal-body" style={{maxHeight:'65vh',overflowY:'auto', background: '#f8fafc', padding: '20px'}}>
-            <p style={{marginBottom: '20px', fontSize: '14px', color: '#64748b', background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
-              <AlertCircle size={16} style={{display:'inline', verticalAlign:'middle', marginRight: '6px', color: '#0ea5e9'}}/>
-              Silakan pilih otoritas akses satu per satu untuk Role ini. Perubahan akan disimpan ke database secara permanen.
-            </p>
-            {Object.keys(groupedPerms).length===0 ? <p style={{textAlign:'center',color:'#94a3b8'}}>Tidak ada data perizinan.</p>
-            : Object.entries(groupedPerms).map(([prefix, group]) => {
-              const ids = group.perms.map(p=>Number(p.id));
-              const allOn = ids.every(id=>assignedPerms.includes(id));
-              return (
-                <div key={prefix} style={{marginBottom:'24px', background:'white', border:'1px solid #e2e8f0', borderRadius:'12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
-                  <div style={{display:'flex', alignItems:'center', gap:'10px', padding:'14px 20px', borderBottom: '1px solid #f1f5f9'}}>
-                    <Shield size={18} color="#0ea5e9" />
-                    <div style={{fontWeight:700,fontSize:'15px',color:'#0f172a', flex: 1}}>{group.label}</div>
-                    <button type="button" className="btn" style={{fontSize: '11px', padding: '4px 8px', background: '#f1f5f9', color: '#64748b'}} onClick={()=>toggleGroup(group.perms)}>
-                      {allOn ? 'Batalkan Semua' : 'Pilih Semua Grup'}
-                    </button>
-                  </div>
-                  <div style={{padding:'16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap:'12px'}}>
-                    {group.perms.map(p => {
-                      const active=assignedPerms.includes(Number(p.id));
-                      return (
-                        <label key={p.id} style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', borderRadius:'8px', border:'1px solid', borderColor: active ? '#bae6fd' : '#f1f5f9', background: active ? '#f0f9ff' : '#fff', cursor:'pointer', transition: 'all 0.2s'}}>
-                          <input type="checkbox" checked={active} onChange={()=>togglePerm(Number(p.id))} style={{width:'18px',height:'18px',accentColor:'#0ea5e9'}}/>
-                          <span style={{fontSize:'13px', fontWeight: active ? 600 : 400, color: active ? '#0369a1' : '#475569'}}>{p.permission_name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-            {permStatus && <div style={{marginTop:'12px',padding:'8px 12px',borderRadius:'6px',background:'#ecfdf5',color:'#059669',fontSize:'13px'}}>{permStatus}</div>}
+        <div className="modal-overlay" onClick={() => setPermModal(false)}><div className="modal-content" style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <h2 style={{ margin: 0 }}>Otoritas Role: <span style={{ color: '#0ea5e9' }}>{permRoleName}</span></h2>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button type="button" onClick={selectAllPermissions} style={{ background: 'none', border: 'none', color: '#0ea5e9', fontSize: '12px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Pilih Semua Otoritas</button>
+                <span style={{ color: '#e2e8f0' }}>|</span>
+                <button type="button" onClick={deselectAllPermissions} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Batalkan Semua</button>
+              </div>
+            </div>
+            <button className="close-btn" onClick={() => setPermModal(false)}><X size={24} /></button>
           </div>
-          <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={()=>setPermModal(false)}>Tutup</button><button type="button" className="btn btn-primary" onClick={savePermissions} disabled={permSaving} style={{minWidth:'140px'}}>{permSaving?'Menyimpan...':'Simpan Otoritas'}</button></div>
+          <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto', background: '#f8fafc', padding: '20px' }}>
+            <p style={{ marginBottom: '20px', fontSize: '14px', color: '#64748b', background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <ShieldCheck size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px', color: '#0ea5e9' }} />
+              Pilih hak akses untuk role ini. Perubahan akan langsung disimpan ke database.
+            </p>
+            {Object.keys(groupedPerms).length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8' }}>Tidak ada data perizinan.</p>
+              : Object.entries(groupedPerms).map(([prefix, group]) => {
+                const ids = group.perms.map(p => Number(p.id));
+                const allOn = ids.every(id => assignedPerms.includes(id));
+                return (
+                  <div key={prefix} style={{ marginBottom: '24px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                      <Shield size={18} color="#0ea5e9" />
+                      <div style={{ fontWeight: 700, fontSize: '15px', color: '#0f172a', flex: 1 }}>{group.label}</div>
+                      <button type="button" className="btn" style={{ fontSize: '11px', padding: '4px 8px', background: '#f1f5f9', color: '#64748b' }} onClick={() => toggleGroup(group.perms)}>
+                        {allOn ? 'Batalkan Semua' : 'Pilih Semua Grup'}
+                      </button>
+                    </div>
+                    <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                      {group.perms.map(p => {
+                        const active = assignedPerms.includes(Number(p.id));
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: '1px solid', borderColor: active ? '#bae6fd' : '#f1f5f9', background: active ? '#f0f9ff' : '#fff', cursor: 'pointer', transition: 'all 0.2s' }}>
+                            <input type="checkbox" checked={active} onChange={() => togglePerm(Number(p.id))} style={{ width: '18px', height: '18px', accentColor: '#0ea5e9' }} />
+                            <span style={{ fontSize: '13px', fontWeight: active ? 600 : 400, color: active ? '#0369a1' : '#475569' }}>{p.permission_name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            {permStatus && <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '6px', background: '#ecfdf5', color: '#059669', fontSize: '13px' }}>{permStatus}</div>}
+          </div>
+          <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setPermModal(false)}>Tutup</button><button type="button" className="btn btn-primary" onClick={savePermissions} disabled={permSaving} style={{ minWidth: '140px' }}>{permSaving ? 'Menyimpan...' : 'Simpan Otoritas'}</button></div>
         </div></div>
       )}
     </div>
@@ -3233,7 +3384,7 @@ function TeamPage({ can, currentUser }) {
   const [isEdit, setIsEdit] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
-  const [formData, setFormData] = useState({ id:'', team_name:'', description:'', status:'active', members:[] });
+  const [formData, setFormData] = useState({ id: '', team_name: '', description: '', status: 'active', members: [] });
   const [userSearch, setUserSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
 
@@ -3246,42 +3397,42 @@ function TeamPage({ can, currentUser }) {
         fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=true`)
       ]);
       const jt = await resT.json(); const ju = await resU.json();
-      if(jt.status==='success') setTeams(jt.data);
-      if(ju.status==='success') setAllUsers(ju.data);
-    } catch(e){console.error(e);} finally {setIsLoading(false);}
+      if (jt.status === 'success') setTeams(jt.data);
+      if (ju.status === 'success') setAllUsers(ju.data);
+    } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  const openCreate = () => { setIsEdit(false); setFormData({id:'', team_name:'', description:'', status:'active', members:[]}); setStatusMsg(null); setUserSearch(''); setModalOpen(true); };
+  const openCreate = () => { setIsEdit(false); setFormData({ id: '', team_name: '', description: '', status: 'active', members: [] }); setStatusMsg(null); setUserSearch(''); setModalOpen(true); };
   const openEdit = async (t) => {
     setIsEdit(true); setStatusMsg(null); setUserSearch('');
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=members&team_id=${t.id}`);
       const json = await res.json();
-      setFormData({id:t.id, team_name:t.team_name, description:t.description||'', status:t.status||'active', members: json.data || []});
-    } catch(e){console.error(e);}
+      setFormData({ id: t.id, team_name: t.team_name, description: t.description || '', status: t.status || 'active', members: json.data || [] });
+    } catch (e) { console.error(e); }
     setModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     setFormSaving(true); setStatusMsg(null);
     const action = isEdit ? 'update' : 'create';
     const payload = isEdit ? formData : { ...formData, created_by: currentUser.id };
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=${action}`, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...payload, user_id: currentUser.id })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, user_id: currentUser.id })
       });
       const d = await res.json();
       setStatusMsg(d.message);
-      if(d.status==='success') { fetchData(); setTimeout(()=>setModalOpen(false),1200); }
-    } catch(err){setStatusMsg('Gagal terhubung API.');} finally {setFormSaving(false);}
+      if (d.status === 'success') { fetchData(); setTimeout(() => setModalOpen(false), 1200); }
+    } catch (err) { setStatusMsg('Gagal terhubung API.'); } finally { setFormSaving(false); }
   };
 
   const handleDeactivate = async (t) => {
-    if(!window.confirm(`Nonaktifkan tim "${t.team_name}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:t.id})}); const d=await r.json(); if(d.status==='success') fetchData(); } catch(e){console.error(e);}
+    if (!window.confirm(`Nonaktifkan tim "${t.team_name}"?`)) return;
+    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch (e) { console.error(e); }
   };
 
   const toggleMember = (uid) => {
@@ -3291,39 +3442,41 @@ function TeamPage({ can, currentUser }) {
     }));
   };
 
-  const filteredModalUsers = allUsers.filter(u => 
-    u.status === 'active' && 
+  const filteredModalUsers = allUsers.filter(u =>
+    u.status === 'active' &&
     (u.username.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
   );
 
   const columns = [
-    { header: 'ID', accessor: 'id', render: (t)=><span style={{fontWeight:700}}>TIM-{t.id}</span> },
-    { header: 'Nama Tim', accessor: 'team_name', render: (t)=><strong style={{color:'#0369a1'}}>{t.team_name}</strong> },
+    { header: 'ID', accessor: 'id', render: (t) => <span style={{ fontWeight: 700 }}>TIM-{t.id}</span> },
+    { header: 'Nama Tim', accessor: 'team_name', render: (t) => <strong style={{ color: '#0369a1' }}>{t.team_name}</strong> },
     { header: 'Deskripsi', accessor: 'description' },
     { header: 'Anggota', render: (t) => <span className="badge badge-info">{t.member_count || 0} User</span> },
     { header: 'Pembuat', accessor: 'creator_name' },
     { header: 'Diubah Oleh', accessor: 'last_editor_name' },
-    { header: 'Status', accessor: 'status', render: (t)=><span className={`badge ${t.status==='active'?'badge-success':'badge-danger'}`}>{t.status==='active'?'Aktif':'Nonaktif'}</span> },
-    { header: 'Aksi', render: (t)=>(
-      <div style={{display:'flex', gap:'6px'}}>
-        {can('team_update') && <button className="btn btn-secondary" style={{padding:'4px 8px', fontSize:'12px'}} onClick={()=>openEdit(t)}>Edit</button>}
-        {can('team_delete') && t.status==='active' && <button className="btn" style={{padding:'4px 8px', fontSize:'12px', background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca'}} onClick={()=>handleDeactivate(t)}>Nonaktifkan</button>}
-      </div>
-    )}
+    { header: 'Status', accessor: 'status', render: (t) => <span className={`badge ${t.status === 'active' ? 'badge-success' : 'badge-danger'}`}>{t.status === 'active' ? 'Aktif' : 'Nonaktif'}</span> },
+    {
+      header: 'Aksi', render: (t) => (
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {can('team_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => openEdit(t)}>Edit</button>}
+          {can('team_delete') && t.status === 'active' && <button className="btn" style={{ padding: '4px 8px', fontSize: '12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDeactivate(t)}>Nonaktifkan</button>}
+        </div>
+      )
+    }
   ];
 
-  if(!can('team_read')) return <div className="page-container"><h1 className="page-title">â›” Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>team_read</code>.</p></div>;
+  if (!can('team_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>team_read</code>.</p></div>;
 
   return (
     <div className="page-container">
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px', flexWrap:'wrap', gap:'12px'}}>
-        <h1 className="page-title" style={{margin:0}}>Master Team / Otoritas Grup</h1>
-        <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Master Team / Otoritas Grup</h1>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('team_create') && <button className="btn btn-primary" onClick={openCreate} style={{display:'flex', alignItems:'center', gap:'8px'}}><Plus size={18}/> Buat Tim Baru</button>}
+          {can('team_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Buat Tim Baru</button>}
         </div>
       </div>
 
@@ -3332,49 +3485,49 @@ function TeamPage({ can, currentUser }) {
       </div>
 
       {modalOpen && (
-        <div className="modal-overlay" onClick={()=>setModalOpen(false)}><div className="modal-content" style={{maxWidth:'800px', width: '95%'}} onClick={e=>e.stopPropagation()}>
-          <div className="modal-header"><h2>{isEdit?'Ubah Data Tim':'Buat Tim Baru'}</h2><button type="button" className="close-btn" onClick={()=>setModalOpen(false)}><X size={24}/></button></div>
-          <form onSubmit={handleSubmit}><div className="modal-body" style={{display:'flex', gap:'24px', flexDirection:'row', flexWrap:'wrap'}}>
-            <div style={{flex:1, minWidth:'300px'}}>
-               <div className="form-group"><label>Nama Tim</label><input required className="form-control" value={formData.team_name} onChange={e=>setFormData({...formData, team_name:e.target.value})} placeholder="Sales Region A"/></div>
-               <div className="form-group"><label>Deskripsi</label><textarea className="form-control" style={{height:'100px'}} value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} placeholder="Tim manajemen wilayah..."/></div>
-               {isEdit && <div className="form-group"><label>Status</label><select className="form-control" value={formData.status} onChange={e=>setFormData({...formData, status:e.target.value})}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></div>}
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '800px', width: '95%' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header"><h2>{isEdit ? 'Ubah Data Tim' : 'Buat Tim Baru'}</h2><button type="button" className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
+          <form onSubmit={handleSubmit}><div className="modal-body" style={{ display: 'flex', gap: '24px', flexDirection: 'row', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <div className="form-group"><label>Nama Tim</label><input required className="form-control" value={formData.team_name} onChange={e => setFormData({ ...formData, team_name: e.target.value })} placeholder="Sales Region A" /></div>
+              <div className="form-group"><label>Deskripsi</label><textarea className="form-control" style={{ height: '100px' }} value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Tim manajemen wilayah..." /></div>
+              {isEdit && <div className="form-group"><label>Status</label><select className="form-control" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></div>}
             </div>
-            
-            <div style={{flex:1.2, minWidth:'350px', background:'#f8fafc', padding:'20px', borderRadius:'12px', border:'1px solid #e2e8f0'}}>
-               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '16px'}}>
-                  <label style={{fontWeight:700, margin:0, fontSize:'15px', color: '#0f172a'}}>Pilih Anggota Tim (Individu)</label>
-                  <span className="badge badge-info" style={{fontSize: '11px'}}>{formData.members.length} Terpilih</span>
-               </div>
-               
-               <div style={{position: 'relative', marginBottom: '12px'}}>
-                  <Search size={16} style={{position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8'}} />
-                  <input type="text" className="form-control" style={{paddingLeft: '32px', fontSize: '13px', background: 'white'}} placeholder="Cari nama atau email user..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-               </div>
 
-               <div style={{maxHeight:'280px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'8px', paddingRight: '4px'}}>
-                  {filteredModalUsers.length === 0 ? (
-                    <div style={{textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '13px'}}>User tidak ditemukan.</div>
-                  ) : filteredModalUsers.map(u => {
-                    const isChecked = formData.members.includes(Number(u.id));
-                    return (
-                      <label key={u.id} style={{display:'flex', alignItems:'center', gap:'12px', padding:'10px 12px', background:'white', border:'1px solid', borderColor:isChecked?'#0ea5e9':'#e2e8f0', borderRadius:'10px', cursor:'pointer', transition: 'all 0.2s', boxShadow: isChecked ? '0 2px 4px rgba(14, 165, 233, 0.1)' : 'none'}}>
-                        <input type="checkbox" checked={isChecked} onChange={()=>toggleMember(u.id)} style={{width: '20px', height: '20px', accentColor:'#0ea5e9'}}/>
-                        <div style={{width: '32px', height: '32px', borderRadius: '50%', background: '#0ea5e9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '12px'}}>
-                          {u.username.substring(0,2).toUpperCase()}
-                        </div>
-                        <div style={{flex:1}}>
-                           <div style={{fontSize:'14px', fontWeight: isChecked ? 700 : 500, color: isChecked ? '#0369a1' : '#1e293b'}}>{u.username}</div>
-                           <div style={{fontSize:'11px', color:'#64748b'}}>{u.email} â€¢ <span style={{color: '#0ea5e9'}}>{u.role_name}</span></div>
-                        </div>
-                      </label>
-                    );
-                  })}
-               </div>
+            <div style={{ flex: 1.2, minWidth: '350px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <label style={{ fontWeight: 700, margin: 0, fontSize: '15px', color: '#0f172a' }}>Pilih Anggota Tim (Individu)</label>
+                <span className="badge badge-info" style={{ fontSize: '11px' }}>{formData.members.length} Terpilih</span>
+              </div>
+
+              <div style={{ position: 'relative', marginBottom: '12px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input type="text" className="form-control" style={{ paddingLeft: '32px', fontSize: '13px', background: 'white' }} placeholder="Cari nama atau email user..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+              </div>
+
+              <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+                {filteredModalUsers.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '13px' }}>User tidak ditemukan.</div>
+                ) : filteredModalUsers.map(u => {
+                  const isChecked = formData.members.includes(Number(u.id));
+                  return (
+                    <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: 'white', border: '1px solid', borderColor: isChecked ? '#0ea5e9' : '#e2e8f0', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: isChecked ? '0 2px 4px rgba(14, 165, 233, 0.1)' : 'none' }}>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleMember(u.id)} style={{ width: '20px', height: '20px', accentColor: '#0ea5e9' }} />
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#0ea5e9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '12px' }}>
+                        {u.username.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: isChecked ? 700 : 500, color: isChecked ? '#0369a1' : '#1e293b' }}>{u.username}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>{u.email} • <span style={{ color: '#0ea5e9' }}>{u.role_name}</span></div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
-          {statusMsg && <div style={{width:'90%', margin:'0 auto 20px auto', padding:'12px', borderRadius:'8px', background:'#ecfdf5', color:'#059669', fontSize:'13px', border:'1px solid #86efac', display: 'flex', alignItems: 'center', gap: '8px'}}><CheckCircle2 size={16}/> {statusMsg}</div>}
-          <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={()=>setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={formSaving} style={{minWidth: '150px'}}>{formSaving?'Menyimpan...':'Simpan Tim'}</button></div></form>
+            {statusMsg && <div style={{ width: '90%', margin: '0 auto 20px auto', padding: '12px', borderRadius: '8px', background: '#ecfdf5', color: '#059669', fontSize: '13px', border: '1px solid #86efac', display: 'flex', alignItems: 'center', gap: '8px' }}><CheckCircle2 size={16} /> {statusMsg}</div>}
+            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={formSaving} style={{ minWidth: '150px' }}>{formSaving ? 'Menyimpan...' : 'Simpan Tim'}</button></div></form>
         </div></div>
       )}
     </div>
@@ -3395,12 +3548,18 @@ export default function App() {
     try {
       const userPerms = user?.permissions || [];
       const hasShowAll = userPerms.includes('workorder_showall') || userPerms.includes('all_access');
+      const compShowAll = userPerms.includes('company_showall') || userPerms.includes('all_access');
+      const picShowAll = userPerms.includes('pic_showall') || userPerms.includes('all_access');
+
       const instUrl = `${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${user?.id || ''}&show_all=${hasShowAll}`;
+      const compUrl = `${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${user?.id || ''}&show_all=${compShowAll}`;
+      const picUrl = `${import.meta.env.VITE_API_URL}/pics.php?action=list&user_id=${user?.id || ''}&show_all=${picShowAll}`;
+
       const [resC, resR, resI, resP] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list`),
+        fetch(compUrl),
         fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`),
         fetch(instUrl),
-        fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=list`)
+        fetch(picUrl)
       ]);
       const jsonC = await resC.json();
       const jsonR = await resR.json();
@@ -3435,13 +3594,13 @@ export default function App() {
     setPermissions(user?.permissions || []);
   }, [user]);
 
-  const can = (p) => permissions.includes(p) || permissions.includes('all_access');
+  const can = (p) => permissions.includes(p);
 
   useEffect(() => {
     const now = new Date();
     let hasChanges = false;
     const itemsToAdd = [];
-    
+
     const processedList = installations.map(inst => {
       if (inst.is_history || Number(inst.is_history) === 1 || inst.status === 'Done') return inst;
       const diffDays = Math.ceil((new Date(inst.replacement_date) - now) / (1000 * 60 * 60 * 24));
