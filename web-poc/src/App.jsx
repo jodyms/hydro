@@ -83,6 +83,45 @@ const formatDiffDaysLabel = (diffDays) => {
   return `H - ${diffDays}`;
 };
 
+const toDateKey = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const formatShortDate = (date) => {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${d}/${m}`;
+};
+
+const buildLinePath = (points, valueKey, width, height, padding, maxValue) => {
+  if (!points.length || maxValue <= 0) return '';
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
+  return points.map((point, index) => {
+    const x = padding.left + (innerW * (points.length === 1 ? 0 : index / (points.length - 1)));
+    const y = padding.top + innerH - ((point[valueKey] || 0) / maxValue) * innerH;
+    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+};
+
+const buildAreaPath = (points, valueKey, width, height, padding, maxValue) => {
+  if (!points.length || maxValue <= 0) return '';
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
+  const topPoints = points.map((point, index) => {
+    const x = padding.left + (innerW * (points.length === 1 ? 0 : index / (points.length - 1)));
+    const y = padding.top + innerH - ((point[valueKey] || 0) / maxValue) * innerH;
+    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+  });
+  const endX = padding.left + innerW;
+  const baseY = padding.top + innerH;
+  const startX = padding.left;
+  return [...topPoints, `L ${endX} ${baseY}`, `L ${startX} ${baseY}`, 'Z'].join(' ');
+};
+
 function ScheduleDateSummary({ item, activeField, includeProduct = false }) {
   if (!item) return <span style={{ color: 'var(--text-muted)' }}>-</span>;
 
@@ -748,20 +787,28 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
 
   const selectedScheduleOption = DASHBOARD_SCHEDULE_FIELDS.find(option => option.value === scheduleField) || DASHBOARD_SCHEDULE_FIELDS[0];
 
-  const groupedUpcoming = useMemo(() => {
-    const list = installations.map(inst => {
+  const dashboardBaseItems = useMemo(() => {
+    return installations.map(inst => {
       const comp = companies.find(c => Number(c.id) === Number(inst.company_id));
       const scheduleDate = inst[scheduleField];
       const diffDays = getDiffDaysFromToday(scheduleDate);
       return { ...inst, comp, scheduleDate, diffDays };
     }).filter(i => {
       if (!i.comp) return false;
-      if (i.status === 'Done' || i.is_history) return false;
+      if (i.is_history) return false;
       if (!i.scheduleDate || i.diffDays === null) return false;
-      if (filterDays !== 'all' && i.diffDays > parseInt(filterDays, 10)) return false;
       if (filterRegion && i.comp.region_name !== filterRegion) return false;
       if (filterType && i.comp.type !== filterType) return false;
-      if (search && !i.comp.name.toLowerCase().includes(search.toLowerCase()) && !i.product_name.toLowerCase().includes(search.toLowerCase())) return false;
+      const keyword = search.toLowerCase();
+      if (search && !(String(i.comp.name || '').toLowerCase().includes(keyword) || String(i.product_name || '').toLowerCase().includes(keyword))) return false;
+      return true;
+    });
+  }, [installations, companies, search, filterRegion, filterType, scheduleField]);
+
+  const groupedUpcoming = useMemo(() => {
+    const list = dashboardBaseItems.filter(i => {
+      if (i.status === 'Done') return false;
+      if (filterDays !== 'all' && i.diffDays > parseInt(filterDays, 10)) return false;
       return true;
     });
 
@@ -777,7 +824,71 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
     return Object.values(groups)
       .map(group => ({ ...group, items: group.items.sort((a, b) => a.diffDays - b.diffDays) }))
       .sort((a, b) => a.minDiffDays - b.minDiffDays);
-  }, [installations, companies, search, filterRegion, filterType, filterDays, scheduleField]);
+  }, [dashboardBaseItems, filterDays]);
+
+  const trendWindowDays = useMemo(() => {
+    if (filterDays === 'all') return 30;
+    const parsed = parseInt(filterDays, 10);
+    if (Number.isNaN(parsed)) return 30;
+    return Math.max(14, parsed);
+  }, [filterDays]);
+
+  const trendSeries = useMemo(() => {
+    const pastDays = 6;
+    const todayRaw = new Date();
+    const today = new Date(todayRaw.getFullYear(), todayRaw.getMonth(), todayRaw.getDate());
+    const start = new Date(today);
+    start.setDate(start.getDate() - pastDays);
+    const totalSpan = pastDays + trendWindowDays + 1;
+    const buckets = {};
+
+    dashboardBaseItems.forEach(item => {
+      const date = parseDateValue(item.scheduleDate);
+      if (!date) return;
+      const key = toDateKey(date);
+      if (!buckets[key]) buckets[key] = { open: 0, done: 0, total: 0 };
+      buckets[key].total += 1;
+      if (item.status === 'Done') buckets[key].done += 1;
+      else buckets[key].open += 1;
+    });
+
+    const points = [];
+    for (let i = 0; i < totalSpan; i += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const key = toDateKey(date);
+      const bucket = buckets[key] || { open: 0, done: 0, total: 0 };
+      points.push({
+        key,
+        label: formatShortDate(date),
+        open: bucket.open,
+        done: bucket.done,
+        total: bucket.total,
+        isToday: key === toDateKey(today)
+      });
+    }
+
+    const maxValue = Math.max(1, ...points.map(point => Math.max(point.open, point.done, point.total)));
+    return { points, maxValue, pastDays, futureDays: trendWindowDays };
+  }, [dashboardBaseItems, trendWindowDays]);
+
+  const workloadByRegion = useMemo(() => {
+    const map = {};
+    dashboardBaseItems.forEach(item => {
+      const region = item.comp?.region_name || '-';
+      if (!map[region]) map[region] = { region, total: 0, open: 0, overdue: 0, urgent: 0 };
+      map[region].total += 1;
+      if (item.status !== 'Done') {
+        map[region].open += 1;
+        if (item.diffDays < 0) map[region].overdue += 1;
+        if (item.diffDays <= 7) map[region].urgent += 1;
+      }
+    });
+
+    const rows = Object.values(map).sort((a, b) => b.open - a.open);
+    const maxOpen = Math.max(1, ...rows.map(row => row.open));
+    return { rows, maxOpen };
+  }, [dashboardBaseItems]);
 
   if (!can('dashboard_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>dashboard_read</code> untuk melihat ringkasan ini.</p></div>;
 
@@ -795,6 +906,15 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
     const [, month] = p.dob.split('-');
     return parseInt(month, 10) === currentMonth;
   });
+
+  const trendChartWidth = 760;
+  const trendChartHeight = 220;
+  const trendChartPadding = { top: 16, right: 16, bottom: 28, left: 28 };
+  const trendAreaPath = buildAreaPath(trendSeries.points, 'total', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
+  const trendTotalPath = buildLinePath(trendSeries.points, 'total', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
+  const trendOpenPath = buildLinePath(trendSeries.points, 'open', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
+  const trendDonePath = buildLinePath(trendSeries.points, 'done', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
+  const trendTickStep = Math.max(1, Math.floor(trendSeries.points.length / 6));
 
   return (
     <div className="page-container">
@@ -1001,6 +1121,97 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
           })}
         </div>
         <Pagination totalItems={groupedUpcoming.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={visiblePage} onPageChange={setCurrentPage} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', marginTop: '24px' }}>
+        <div className="card-view" style={{ margin: 0, borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="card-header" style={{ background: '#f8fafc', padding: '18px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} /> Trend Jadwal ({selectedScheduleOption.label})
+            </h2>
+            <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+              7 hari terakhir hingga {trendSeries.futureDays} hari ke depan
+            </p>
+          </div>
+          <div style={{ padding: '16px 18px 20px 18px' }}>
+            {trendSeries.points.every(point => point.total === 0) ? (
+              <div style={{ textAlign: 'center', padding: '36px 12px', color: '#94a3b8' }}>
+                Tidak ada data trend pada range waktu ini.
+              </div>
+            ) : (
+              <>
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <svg viewBox={`0 0 ${trendChartWidth} ${trendChartHeight}`} style={{ minWidth: '640px', width: '100%', height: '220px' }}>
+                    <path d={trendAreaPath} fill="rgba(14, 165, 233, 0.15)" />
+                    <path d={trendTotalPath} fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d={trendOpenPath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />
+                    <path d={trendDonePath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    {trendSeries.points.map((point, index) => {
+                      if (index % trendTickStep !== 0 && !point.isToday) return null;
+                      const innerW = trendChartWidth - trendChartPadding.left - trendChartPadding.right;
+                      const x = trendChartPadding.left + (innerW * (trendSeries.points.length === 1 ? 0 : index / (trendSeries.points.length - 1)));
+                      return (
+                        <g key={point.key}>
+                          <line x1={x} y1={trendChartHeight - trendChartPadding.bottom} x2={x} y2={trendChartHeight - trendChartPadding.bottom + 6} stroke="#cbd5e1" strokeWidth="1" />
+                          <text x={x} y={trendChartHeight - 4} textAnchor="middle" fontSize="10" fill={point.isToday ? '#0369a1' : '#94a3b8'} fontWeight={point.isToday ? 700 : 500}>
+                            {point.isToday ? 'Hari Ini' : point.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '10px', fontSize: '0.78rem', color: '#475569' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#0ea5e9' }} /> Total</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#f59e0b' }} /> Open</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#10b981' }} /> Done</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="card-view" style={{ margin: 0, borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="card-header" style={{ background: '#f8fafc', padding: '18px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MapPin size={18} /> Workload per Region
+            </h2>
+            <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+              Distribusi beban open task berdasarkan region
+            </p>
+          </div>
+          <div style={{ padding: '16px 20px 20px 20px' }}>
+            {workloadByRegion.rows.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '28px 8px', color: '#94a3b8' }}>
+                Tidak ada data workload region.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {workloadByRegion.rows.map(row => {
+                  const pct = Math.round((row.open / workloadByRegion.maxOpen) * 100);
+                  const overduePct = row.open > 0 ? Math.round((row.overdue / row.open) * 100) : 0;
+                  return (
+                    <div key={row.region} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 12px', background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.region}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          Open: <strong style={{ color: '#0f172a' }}>{row.open}</strong> / Total: <strong style={{ color: '#0f172a' }}>{row.total}</strong>
+                        </div>
+                      </div>
+                      <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: row.overdue > 0 ? 'linear-gradient(to right, #f59e0b, #ef4444)' : 'linear-gradient(to right, #0ea5e9, #0284c7)', borderRadius: '999px' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#64748b' }}>
+                        <span>Urgent (&lt;=7d): <strong style={{ color: '#b45309' }}>{row.urgent}</strong></span>
+                        <span>Overdue: <strong style={{ color: row.overdue > 0 ? '#dc2626' : '#16a34a' }}>{row.overdue} ({overduePct}%)</strong></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Sidebar: Birthdays & Quick Stats */}
