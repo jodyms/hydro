@@ -172,9 +172,44 @@ const parseActivityPayload = (raw) => {
       label: formatActivityFieldLabel(key),
       value: formatActivityFieldValue(key, value)
     }));
-  } catch (e) {
+  } catch {
     return [];
   }
+};
+
+const getActivityChanges = (oldRaw, newRaw) => {
+  const oldVals = parseActivityPayload(oldRaw);
+  const newVals = parseActivityPayload(newRaw);
+  const allKeys = new Set([...oldVals.map(o => o.key), ...newVals.map(n => n.key)]);
+  const changes = [];
+
+  allKeys.forEach(key => {
+    const oldV = oldVals.find(o => o.key === key);
+    const newV = newVals.find(n => n.key === key);
+    const oldValue = oldV ? oldV.value : '-';
+    const newValue = newV ? newV.value : '-';
+
+    if (oldValue !== newValue) {
+      changes.push({ label: formatActivityFieldLabel(key), old: oldValue, new: newValue });
+    }
+  });
+
+  return changes;
+};
+
+const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadCsvFile = (fileName, headers, rows) => {
+  const content = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([`\ufeff${content}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 import Login from './pages/Login';
 
@@ -1393,12 +1428,12 @@ function CompanyPage({ can, currentUser }) {
     <div className="page-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Data Company & Prospek</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', flex: 1, minWidth: '220px' }}>
             <Filter size={16} color="#64748b" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
               {filterRegions.map(rid => {
@@ -1411,7 +1446,7 @@ function CompanyPage({ can, currentUser }) {
                 );
               })}
             </div>
-            <input list="region-list" className="form-control" style={{ border: 'none', padding: '4px', fontSize: '13px', width: '130px', minWidth: '80px' }} placeholder="Select Region..." value={regionSearch} onChange={e => {
+            <input list="region-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '140px' }} placeholder="Select Region..." value={regionSearch} onChange={e => {
               const val = e.target.value;
               setRegionSearch(val);
               const found = regions.find(r => r.region_name.toLowerCase() === val.toLowerCase());
@@ -1422,10 +1457,10 @@ function CompanyPage({ can, currentUser }) {
             }} />
             <datalist id="region-list">{regions.map(r => <option key={r.id} value={r.region_name} />)}</datalist>
           </div>
-          {can('company_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', address: '', industry_id: '', region_id: '', type_id: '2' }); setModalOpen(true); }}><Plus size={18} /> Tambah Company</button>}
+          {can('company_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', address: '', industry_id: '', region_id: '', type_id: '2' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah Company</button>}
         </div>
       </div>
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={filteredData} columns={columns} fileName="companies" />}
       </div>
       {modalOpen && (
@@ -1512,17 +1547,17 @@ function RegionPage({ can, currentUser }) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Master Region</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('region_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '' }); setModalOpen(true); }}><Plus size={18} /> Tambah Region</button>}
+          {can('region_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah Region</button>}
         </div>
       </div>
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={regions.filter(r => showInactive || (r.status || 'active') === 'active')} columns={columns} fileName="regions" />}
       </div>
       {modalOpen && (
@@ -1626,12 +1661,12 @@ function PICPage({ can, currentUser }) {
     <div className="page-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Data PIC Customer</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', flex: 1, minWidth: '220px' }}>
             <Filter size={16} color="#64748b" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
               {filterCompanies.map(cid => {
@@ -1644,7 +1679,7 @@ function PICPage({ can, currentUser }) {
                 );
               })}
             </div>
-            <input list="company-list" className="form-control" style={{ border: 'none', padding: '4px', fontSize: '13px', width: '150px', minWidth: '100px' }} placeholder="Select Company..." value={companySearch} onChange={e => {
+            <input list="company-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '140px' }} placeholder="Select Company..." value={companySearch} onChange={e => {
               const val = e.target.value;
               setCompanySearch(val);
               const found = companies.find(c => c.name.toLowerCase() === val.toLowerCase());
@@ -1655,10 +1690,10 @@ function PICPage({ can, currentUser }) {
             }} />
             <datalist id="company-list">{companies.map(c => <option key={c.id} value={c.name} />)}</datalist>
           </div>
-          {can('pic_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', company_id: '', job_title: '', phone: '', email: '', dob: '', address: '' }); setModalOpen(true); }}><Plus size={18} /> Tambah PIC</button>}
+          {can('pic_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', company_id: '', job_title: '', phone: '', email: '', dob: '', address: '' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah PIC</button>}
         </div>
       </div>
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={filteredData} columns={columns} fileName="pics" />}
       </div>
       {modalOpen && (
@@ -1912,16 +1947,16 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     <div className="page-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Input Instalasi / Penawaran</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          <select className="form-control" style={{ padding: '4px', fontSize: '13px', width: '150px' }} value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <select className="form-control" style={{ padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '140px' }} value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="">Semua Tipe...</option>
             {COMPANY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', flex: 1, minWidth: '180px' }}>
             <Filter size={16} color="#64748b" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
               {filterRegions.map(rid => (
@@ -1931,7 +1966,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                 </span>
               ))}
             </div>
-            <input list="sales-region-list" className="form-control" style={{ border: 'none', padding: '4px', fontSize: '13px', width: '130px', minWidth: '80px' }} placeholder="Filter Region..." value={regionSearch} onChange={e => {
+            <input list="sales-region-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '120px' }} placeholder="Filter Region..." value={regionSearch} onChange={e => {
               const val = e.target.value;
               setRegionSearch(val);
               if (regions.find(r => r.region_name.toLowerCase() === val.toLowerCase()) && !filterRegions.includes(val)) {
@@ -1942,7 +1977,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
             <datalist id="sales-region-list">{regions.map(r => <option key={r.id} value={r.region_name} />)}</datalist>
           </div>
           {can('sales_create') && (
-            <button className="btn btn-primary" onClick={() => setModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button className="btn btn-primary" onClick={() => setModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}>
               <PlusCircle size={20} /> Buat Rekaman Baru
             </button>
           )}
@@ -1979,11 +2014,11 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         </div>
       )}
 
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input className="form-control" style={{ paddingLeft: '34px' }} placeholder="Cari klien atau produk..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input className="form-control" style={{ padding: '12px 14px 12px 40px', width: '100%' }} placeholder="Cari klien atau produk..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
           </div>
           <span style={{ fontSize: '0.85rem', color: '#64748b', alignSelf: 'center' }}>Menampilkan {groupedByCompany.length} klien</span>
         </div>
@@ -2602,8 +2637,8 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
     <div className="page-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Monitoring Data Instalasi Aktif</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', flex: 1, minWidth: '220px' }}>
             <Filter size={16} color="#64748b" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
               {filterCompanies.map(cid => {
@@ -2616,7 +2651,7 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
                 );
               })}
             </div>
-            <input list="inst-company-list" className="form-control" style={{ border: 'none', padding: '4px', fontSize: '13px', width: '150px', minWidth: '100px' }} placeholder="Filter Company..." value={companySearch} onChange={e => {
+            <input list="inst-company-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '140px' }} placeholder="Filter Company..." value={companySearch} onChange={e => {
               setCompanySearch(e.target.value);
               const found = companies.find(c => c.name.toLowerCase() === e.target.value.toLowerCase());
               if (found && !filterCompanies.includes(String(found.id))) {
@@ -2629,7 +2664,7 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
         </div>
       </div>
 
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         <DataTable data={filteredData} columns={columns} fileName="active-installations" />
       </div>
 
@@ -3328,7 +3363,7 @@ const getLogBadgeClass = (action) => {
   }
 };
 
-function HistoryPage({ installations, companies, can, regions }) {
+function HistoryPage({ installations, companies, can, regions, currentUser }) {
   const [search, setSearch] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -3336,14 +3371,43 @@ function HistoryPage({ installations, companies, can, regions }) {
   const [companyLogs, setCompanyLogs] = useState({});
   const [loadingLogs, setLoadingLogs] = useState(new Set());
   const [expandedDiffs, setExpandedDiffs] = useState(new Set());
+  const [isExportingHistory, setIsExportingHistory] = useState(false);
+  const [historyData, setHistoryData] = useState({ installations: null, companies: null });
   const fetchedRef = useRef(new Set());
+
+  const canHistoryShowAll = can('history_showall') || can('all_access');
+  const historyInstallations = historyData.installations || installations;
+  const historyCompanies = historyData.companies || companies;
 
   useEffect(() => { setCurrentPage(1); }, [search, filterRegion]);
 
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    let cancelled = false;
+    const showAll = canHistoryShowAll;
+
+    Promise.all([
+      fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json()),
+      fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json())
+    ]).then(([installationsJson, companiesJson]) => {
+      if (cancelled) return;
+
+      setHistoryData(prev => ({
+        installations: installationsJson.status === 'success' ? installationsJson.data : prev.installations,
+        companies: companiesJson.status === 'success' ? companiesJson.data : prev.companies
+      }));
+    }).catch(err => {
+      console.error('Failed to fetch history scoped data:', err);
+    });
+
+    return () => { cancelled = true; };
+  }, [currentUser?.id, canHistoryShowAll]);
+
   const historicalGroups = useMemo(() => {
-    const list = installations.filter(i => {
+    const list = historyInstallations.filter(i => {
       if (!Number(i.is_history)) return false;
-      const comp = companies.find(c => Number(c.id) === Number(i.company_id));
+      const comp = historyCompanies.find(c => Number(c.id) === Number(i.company_id));
       if (!comp) return false;
       const searchMatch = comp.name.toLowerCase().includes(search.toLowerCase()) || (i.product_name || '').toLowerCase().includes(search.toLowerCase());
       if (!searchMatch) return false;
@@ -3353,13 +3417,13 @@ function HistoryPage({ installations, companies, can, regions }) {
 
     const groups = {};
     list.forEach(i => {
-      const comp = companies.find(c => Number(c.id) === Number(i.company_id));
+      const comp = historyCompanies.find(c => Number(c.id) === Number(i.company_id));
       if (!groups[i.company_id]) groups[i.company_id] = { company: comp, items: [] };
       groups[i.company_id].items.push(i);
     });
 
     return Object.values(groups).sort((a, b) => b.items.length - a.items.length);
-  }, [installations, companies, search, filterRegion]);
+  }, [historyInstallations, historyCompanies, search, filterRegion]);
 
   const currentData = historicalGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -3367,10 +3431,10 @@ function HistoryPage({ installations, companies, can, regions }) {
     if (!currentData.length) return;
     const missingIds = currentData
       .map(g => g.company.id)
-      .filter(id => !fetchedRef.current.has(id));
+      .filter(id => !fetchedRef.current.has(String(id)));
     if (!missingIds.length) return;
 
-    missingIds.forEach(id => fetchedRef.current.add(id));
+    missingIds.forEach(id => fetchedRef.current.add(String(id)));
     setLoadingLogs(prev => {
       const next = new Set(prev);
       missingIds.forEach(id => next.add(id));
@@ -3398,6 +3462,188 @@ function HistoryPage({ installations, companies, can, regions }) {
     });
   }, [currentData]);
 
+  const loadLogsForCompanies = async (companyIds) => {
+    const uniqueIds = Array.from(new globalThis.Map(
+      companyIds.filter(Boolean).map(id => [String(id), id])
+    ).values());
+    const missingIds = uniqueIds.filter(id => !Object.prototype.hasOwnProperty.call(companyLogs, String(id)));
+
+    if (!missingIds.length) {
+      return { logsByCompany: companyLogs, failedCompanyIds: new Set() };
+    }
+
+    setLoadingLogs(prev => {
+      const next = new Set(prev);
+      missingIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    const results = await Promise.allSettled(
+      missingIds.map(id =>
+        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
+          .then(r => r.json())
+      )
+    );
+
+    const nextLogs = {};
+    const failedCompanyIds = new Set();
+
+    results.forEach((res, idx) => {
+      const companyId = missingIds[idx];
+      fetchedRef.current.add(String(companyId));
+
+      if (res.status === 'fulfilled' && res.value.status === 'success') {
+        nextLogs[companyId] = res.value.data;
+      } else {
+        nextLogs[companyId] = [];
+        failedCompanyIds.add(String(companyId));
+      }
+    });
+
+    setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
+    setLoadingLogs(prev => {
+      const next = new Set(prev);
+      missingIds.forEach(id => next.delete(id));
+      return next;
+    });
+
+    return { logsByCompany: { ...companyLogs, ...nextLogs }, failedCompanyIds };
+  };
+
+  const formatHistoryLogDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('id-ID');
+  };
+
+  const formatCycle = (item) => {
+    const value = item.maintenance_cycle_value || '';
+    const unit = item.maintenance_cycle_unit || '';
+    const cycle = `${value} ${unit}`.trim();
+    return cycle || '-';
+  };
+
+  const buildHistoryDetailText = (log, changes) => {
+    const changeText = changes.length
+      ? changes.map(change => `${change.label}: ${change.old} -> ${change.new}`).join('; ')
+      : 'Tidak ada perubahan field';
+
+    return [
+      formatHistoryLogDate(log.created_at),
+      log.action_type || '-',
+      `Oleh: ${log.user_name || 'System'}`,
+      log.description || '-',
+      changeText
+    ].join(' | ');
+  };
+
+  const handleExportCsv = async () => {
+    if (!historicalGroups.length) {
+      alert('Tidak ada data history untuk diexport.');
+      return;
+    }
+
+    setIsExportingHistory(true);
+
+    try {
+      const { logsByCompany, failedCompanyIds } = await loadLogsForCompanies(historicalGroups.map(group => group.company.id));
+      const headers = [
+        'Perusahaan',
+        'Region',
+        'ID Produk Histori',
+        'Nama Produk',
+        'Tgl Instalasi',
+        'Target Ganti',
+        'Siklus Maintenance',
+        'Status',
+        'Catatan Produk',
+        'Assigned To',
+        'Log Tanggal',
+        'Log Tipe',
+        'Log Oleh',
+        'Log Deskripsi',
+        'Field Berubah',
+        'Nilai Lama',
+        'Nilai Baru',
+        'Catatan Detail Histori Produk'
+      ];
+      const rows = [];
+
+      historicalGroups.forEach(group => {
+        const companyId = String(group.company.id);
+        const logs = logsByCompany[companyId] || [];
+        const isLogFailed = failedCompanyIds.has(companyId);
+
+        group.items.forEach(item => {
+          const baseRow = [
+            group.company.name || '-',
+            group.company.region_name || '-',
+            item.id || '-',
+            item.product_name || '-',
+            item.installation_date || '-',
+            item.replacement_date || '-',
+            formatCycle(item),
+            item.status || '-',
+            item.notes || '-',
+            item.assigned_to_name || '-'
+          ];
+
+          if (isLogFailed) {
+            rows.push([...baseRow, '', '', '', '', '', '', '', 'Gagal memuat log aktivitas.']);
+            return;
+          }
+
+          const itemLogs = logs.filter(log => String(log.installation_id) === String(item.id));
+
+          if (!itemLogs.length) {
+            rows.push([...baseRow, '', '', '', '', '', '', '', 'Tidak ada log aktivitas untuk produk ini.']);
+            return;
+          }
+
+          itemLogs.forEach(log => {
+            const changes = getActivityChanges(log.old_values, log.new_values);
+            const logMeta = [
+              formatHistoryLogDate(log.created_at),
+              log.action_type || '-',
+              log.user_name || 'System',
+              log.description || '-'
+            ];
+
+            if (!changes.length) {
+              rows.push([
+                ...baseRow,
+                ...logMeta,
+                '',
+                '',
+                '',
+                buildHistoryDetailText(log, changes)
+              ]);
+              return;
+            }
+
+            changes.forEach(change => {
+              rows.push([
+                ...baseRow,
+                ...logMeta,
+                change.label,
+                change.old,
+                change.new,
+                buildHistoryDetailText(log, [change])
+              ]);
+            });
+          });
+        });
+      });
+
+      downloadCsvFile(`history-produk-${getLocalDateString()}.csv`, headers, rows);
+    } catch (err) {
+      console.error('Failed to export history CSV:', err);
+      alert('Gagal export CSV history.');
+    } finally {
+      setIsExportingHistory(false);
+    }
+  };
+
   if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
 
   const toggleExpand = async (companyId) => {
@@ -3417,6 +3663,7 @@ function HistoryPage({ installations, companies, can, regions }) {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${companyId}`);
       const json = await res.json();
       if (json.status === 'success') {
+        fetchedRef.current.add(String(companyId));
         setCompanyLogs(prev => ({ ...prev, [companyId]: json.data }));
       }
     } catch (err) {
@@ -3437,21 +3684,7 @@ function HistoryPage({ installations, companies, can, regions }) {
   };
 
   const renderDiff = (oldRaw, newRaw) => {
-    const oldVals = parseActivityPayload(oldRaw);
-    const newVals = parseActivityPayload(newRaw);
-    if (!oldVals.length && !newVals.length) return <em style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tidak ada perubahan field</em>;
-
-    const allKeys = new Set([...oldVals.map(o => o.key), ...newVals.map(n => n.key)]);
-    const changes = [];
-    allKeys.forEach(key => {
-      const oldV = oldVals.find(o => o.key === key);
-      const newV = newVals.find(n => n.key === key);
-      const oldValue = oldV ? oldV.value : '-';
-      const newValue = newV ? newV.value : '-';
-      if (oldValue !== newValue) {
-        changes.push({ label: formatActivityFieldLabel(key), old: oldValue, new: newValue });
-      }
-    });
+    const changes = getActivityChanges(oldRaw, newRaw);
 
     if (!changes.length) return <em style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tidak ada perubahan field</em>;
 
@@ -3486,6 +3719,15 @@ function HistoryPage({ installations, companies, can, regions }) {
             <option value="">Semua Wilayah</option>
             {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
           </select>
+          <button
+            className="btn btn-secondary"
+            onClick={handleExportCsv}
+            disabled={isExportingHistory || historicalGroups.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+          >
+            {isExportingHistory ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
+            {isExportingHistory ? 'Menyiapkan CSV...' : 'Export CSV'}
+          </button>
         </div>
         <table className="data-table">
           <thead>
@@ -3630,18 +3872,18 @@ function UserPage({ can, currentUser }) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Master User / Pengguna Sistem</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('user_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Add New User</button>}
+          {can('user_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Add New User</button>}
         </div>
       </div>
 
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         {isLoadingData ? (
           <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
@@ -3779,18 +4021,18 @@ function RolePage({ can, currentUser }) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Master Role / Peran Jabatan</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('role_create') && <button className="btn btn-primary" onClick={openCreateRole} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Tambah Role</button>}
+          {can('role_create') && <button className="btn btn-primary" onClick={openCreateRole} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah Role</button>}
         </div>
       </div>
 
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
@@ -3957,18 +4199,18 @@ function TeamPage({ can, currentUser }) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Master Team / Otoritas Grup</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
             Tampilkan Nonaktif
           </label>
-          {can('team_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Buat Tim Baru</button>}
+          {can('team_create') && <button className="btn btn-primary" onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Buat Tim Baru</button>}
         </div>
       </div>
 
-      <div className="card-view">
+      <div className="card-view" style={{ padding: '20px' }}>
         <DataTable data={teams.filter(t => showInactive || (t.status || 'active') === 'active')} columns={columns} fileName="master-teams" />
       </div>
 
@@ -4127,7 +4369,7 @@ export default function App() {
                 <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} companies={companies} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage companies={companies} installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} /> : <div className="page-container">Akses Ditolak</div>} />
+                <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/master-role" element={can('role_read') ? <RolePage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/master-team" element={can('team_read') ? <TeamPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
