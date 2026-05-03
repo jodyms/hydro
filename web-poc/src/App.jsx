@@ -5,10 +5,10 @@ import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, 
 let STATUS_OPTIONS = ['Reminder Sent', 'Offering Product', 'Scheduled for Replacement', 'Done', 'Skip', 'Follow up'];
 const COMPANY_TYPES = ['Customer', 'Prospek'];
 const DASHBOARD_SCHEDULE_FIELDS = [
-  { value: 'followup_date', label: 'Tgl Follow Up', shortLabel: 'Follow Up' },
-  { value: 'visit_schedule_date', label: 'Jadwal Kunjungan', shortLabel: 'Visit' },
-  { value: 'installation_date', label: 'Tgl Instalasi', shortLabel: 'Pasang' },
-  { value: 'replacement_date', label: 'Target Ganti', shortLabel: 'Target' }
+  { value: 'installation_date', label: 'Tanggal Instalasi', shortLabel: 'Pasang' },
+  { value: 'replacement_date', label: 'Tanggal Penggantian Filter', shortLabel: 'Target' },
+  { value: 'visit_schedule_date', label: 'Jadwal Kunjungan Sales', shortLabel: 'Visit' },
+  { value: 'followup_date', label: 'Tanggal Follow Up', shortLabel: 'Follow Up' }
 ];
 const ACTIVITY_FIELD_LABELS = {
   company_name: 'Company',
@@ -212,6 +212,7 @@ const downloadCsvFile = (fileName, headers, rows) => {
   URL.revokeObjectURL(url);
 };
 import Login from './pages/Login';
+import CompanyHistoryModal from './components/CompanyHistoryModal';
 
 // --- Shared Components ---
 
@@ -816,7 +817,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
   const [filterRegion, setFilterRegion] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDays, setFilterDays] = useState('90');
-  const [scheduleField, setScheduleField] = useState('replacement_date');
+  const [scheduleField, setScheduleField] = useState('installation_date');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedCompanies, setExpandedCompanies] = useState({});
 
@@ -1730,15 +1731,9 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   const [currentPage, setCurrentPage] = useState(1);
   const [renewModal, setRenewModal] = useState(false);
   const [renewData, setRenewData] = useState(null);
-  const [companyLogs, setCompanyLogs] = useState({});
-  const [loadingLogs, setLoadingLogs] = useState(new Set());
-  const [logModalOpen, setLogModalOpen] = useState(false);
-  const [logModalCompany, setLogModalCompany] = useState(null);
-  const [modalExpandedDiffs, setModalExpandedDiffs] = useState(new Set());
-  const [modalPage, setModalPage] = useState(1);
-  const [modalProductFilter, setModalProductFilter] = useState('');
-  const MODAL_LOGS_PER_PAGE = 10;
-  const fetchedSalesRef = useRef(new Set());
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyModalCompany, setHistoryModalCompany] = useState(null);
+  const [historyModalItems, setHistoryModalItems] = useState([]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState({});
 
@@ -1902,41 +1897,13 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
-  const openLogModal = (company, items) => {
-    setLogModalCompany({ ...company, products: items || [] });
-    setLogModalOpen(true);
-    setModalPage(1);
-    setModalExpandedDiffs(new Set());
-    setModalProductFilter('');
-
-    if (companyLogs[company.id]) return;
-
-    setLoadingLogs(prev => new Set(prev).add(company.id));
-    fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
-      .then(r => r.json())
-      .then(json => {
-        if (json.status === 'success') {
-          fetchedSalesRef.current.add(String(company.id));
-          setCompanyLogs(prev => ({ ...prev, [company.id]: json.data }));
-        }
-      })
-      .catch(err => console.error('Failed to fetch logs:', err))
-      .finally(() => {
-        setLoadingLogs(prev => {
-          const n = new Set(prev);
-          n.delete(company.id);
-          return n;
-        });
-      });
-  };
-
-  const toggleModalDiff = (logId) => {
-    setModalExpandedDiffs(prev => {
-      const next = new Set(prev);
-      if (next.has(logId)) next.delete(logId);
-      else next.add(logId);
-      return next;
-    });
+  const openHistoryModal = (company) => {
+    const items = installations.filter(i =>
+      String(i.company_id) === String(company.id) && Number(i.is_history) === 1
+    );
+    setHistoryModalCompany(company);
+    setHistoryModalItems(items);
+    setHistoryModalOpen(true);
   };
 
   const activeInstallations = useMemo(() => installations.filter(i => {
@@ -1967,53 +1934,6 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
   const ITEMS_PER_PAGE = 10;
   const currentGroups = groupedByCompany.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  useEffect(() => {
-    if (!currentGroups.length) return;
-    const missingIds = currentGroups
-      .map(g => g.company.id)
-      .filter(id => !fetchedSalesRef.current.has(String(id)));
-    if (!missingIds.length) return;
-
-    missingIds.forEach(id => fetchedSalesRef.current.add(String(id)));
-    setLoadingLogs(prev => {
-      const next = new Set(prev);
-      missingIds.forEach(id => next.add(id));
-      return next;
-    });
-
-    Promise.allSettled(
-      missingIds.map(id =>
-        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
-          .then(r => r.json())
-      )
-    ).then(results => {
-      const nextLogs = {};
-      results.forEach((res, idx) => {
-        const companyId = missingIds[idx];
-        nextLogs[companyId] = (res.status === 'fulfilled' && res.value.status === 'success')
-          ? res.value.data : [];
-      });
-      setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
-      setLoadingLogs(prev => {
-        const next = new Set(prev);
-        missingIds.forEach(id => next.delete(id));
-        return next;
-      });
-    });
-  }, [currentGroups]);
-
-  const modalLogs = useMemo(() => {
-    let all = companyLogs[logModalCompany?.id] || [];
-    if (modalProductFilter) {
-      all = all.filter(log => String(log.installation_id) === String(modalProductFilter));
-    }
-    return all.slice(
-      (modalPage - 1) * MODAL_LOGS_PER_PAGE,
-      modalPage * MODAL_LOGS_PER_PAGE
-    );
-  }, [companyLogs, logModalCompany, modalPage, modalProductFilter]);
-
 
   return (
     <div className="page-container">
@@ -2104,6 +2024,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
           const isExpanded = expandedCompanies[group.company.id];
           const companySelected = group.items.every(i => selectedIds.includes(i.id));
           const nearExpiry = group.items.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length;
+          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && Number(i.is_history) === 1).length;
           return (
             <div key={group.company.id} style={{ marginBottom: '12px', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', background: 'white', transition: 'all 0.2s', boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.06)' : 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', cursor: 'pointer', background: isExpanded ? '#f8fafc' : 'white', gap: '16px', transition: 'background 0.2s' }} onClick={() => toggleExpand(group.company.id)}>
@@ -2117,6 +2038,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{group.company.name}</span>
                     <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>{group.company.type}</span>
+                    {historyCount > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>{historyCount} Riwayat</span>}
                     {nearExpiry > 0 && <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>{nearExpiry} akan habis</span>}
                   </div>
                   <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}><MapPin size={12} style={{ verticalAlign: 'middle' }} /> {group.company.region || '-'}</div>
@@ -2133,12 +2055,12 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                       Transfer
                     </button>
                   )}
-                  <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }} onClick={e => { e.stopPropagation(); openLogModal(group.company, group.items); }}>
+                  <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }} onClick={e => { e.stopPropagation(); openHistoryModal(group.company); }}>
                     <Archive size={14} style={{ marginRight: '4px' }} /> History
                   </button>
                 </div>
               </div>
-              {isExpanded && (
+                  {isExpanded && (
                 <div style={{ borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ overflowX: 'auto' }}>
                     <table className="data-table" style={{ margin: 0 }}>
@@ -2473,89 +2395,12 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         </div>
       )}
 
-      {logModalOpen && logModalCompany && (
-        <div className="modal-overlay" onClick={() => setLogModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2>Log Aktivitas — {logModalCompany.name}</h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Region: {logModalCompany.region || '-'}</p>
-              </div>
-              <button className="close-btn" onClick={() => setLogModalOpen(false)}><X size={24} /></button>
-            </div>
-            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
-              {logModalCompany.products && logModalCompany.products.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <select
-                    className="form-control"
-                    value={modalProductFilter}
-                    onChange={e => { setModalProductFilter(e.target.value); setModalPage(1); }}
-                  >
-                    <option value="">Semua Produk</option>
-                    {logModalCompany.products.map(p => (
-                      <option key={p.id} value={p.id}>{p.product_name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {loadingLogs.has(logModalCompany.id) ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '40px 0', color: 'var(--text-muted)' }}>
-                  <Loader2 className="animate-spin" size={20} /> Memuat log aktivitas...
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {(companyLogs[logModalCompany.id] || []).length === 0 ? (
-                    <em style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
-                  ) : (
-                    <>
-                      {modalLogs.map((log) => (
-                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                            <span className={`badge ${getLogBadgeClass(log.action_type)}`}>{log.action_type}</span>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
-                          </div>
-                          <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                            <strong>Oleh:</strong> {log.user_name || 'System'}
-                          </div>
-                          {log.description && (
-                            <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '10px' }}>
-                              {log.description}
-                            </div>
-                          )}
-                          {(log.old_values || log.new_values) && (
-                            <>
-                              <button
-                                onClick={() => toggleModalDiff(log.id)}
-                                style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
-                              >
-                                {modalExpandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
-                              </button>
-                              {modalExpandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      <Pagination
-                        totalItems={(companyLogs[logModalCompany.id] || []).filter(log => !modalProductFilter || String(log.installation_id) === String(modalProductFilter)).length}
-                        itemsPerPage={MODAL_LOGS_PER_PAGE}
-                        currentPage={modalPage}
-                        onPageChange={(page) => {
-                          setModalPage(page);
-                          setModalExpandedDiffs(new Set());
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setLogModalOpen(false)}>Tutup</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CompanyHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        company={historyModalCompany}
+        historyItems={historyModalItems}
+      />
       <TransferModal
         isOpen={transferOpen}
         onClose={() => setTransferOpen(false)}
@@ -3431,28 +3276,15 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
   );
 }
 
-const getLogBadgeClass = (action) => {
-  switch (action) {
-    case 'RENEW': return 'badge-success';
-    case 'CREATE': return 'badge-info';
-    case 'EDIT': return 'badge-warning';
-    case 'STATUS_CHANGE': return 'badge-danger';
-    default: return 'badge-secondary';
-  }
-};
-
 function HistoryPage({ installations, companies, can, regions, currentUser }) {
   const [search, setSearch] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [companyLogs, setCompanyLogs] = useState({});
-  const [loadingLogs, setLoadingLogs] = useState(new Set());
   const [isExportingHistory, setIsExportingHistory] = useState(false);
-  const [logModalOpen, setLogModalOpen] = useState(false);
-  const [logModalCompany, setLogModalCompany] = useState(null);
-  const [modalExpandedDiffs, setModalExpandedDiffs] = useState(new Set());
-  const [modalPage, setModalPage] = useState(1);
-  const MODAL_LOGS_PER_PAGE = 10;
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyModalCompany, setHistoryModalCompany] = useState(null);
+  const [historyModalItems, setHistoryModalItems] = useState([]);
   const [historyData, setHistoryData] = useState({ installations: null, companies: null });
   const fetchedRef = useRef(new Set());
 
@@ -3508,41 +3340,6 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
 
   const currentData = historicalGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  useEffect(() => {
-    if (!currentData.length) return;
-    const missingIds = currentData
-      .map(g => g.company.id)
-      .filter(id => !fetchedRef.current.has(String(id)));
-    if (!missingIds.length) return;
-
-    missingIds.forEach(id => fetchedRef.current.add(String(id)));
-    setLoadingLogs(prev => {
-      const next = new Set(prev);
-      missingIds.forEach(id => next.add(id));
-      return next;
-    });
-
-    Promise.allSettled(
-      missingIds.map(id =>
-        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
-          .then(r => r.json())
-      )
-    ).then(results => {
-      const nextLogs = {};
-      results.forEach((res, idx) => {
-        const companyId = missingIds[idx];
-        nextLogs[companyId] = (res.status === 'fulfilled' && res.value.status === 'success')
-          ? res.value.data : [];
-      });
-      setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
-      setLoadingLogs(prev => {
-        const next = new Set(prev);
-        missingIds.forEach(id => next.delete(id));
-        return next;
-      });
-    });
-  }, [currentData]);
-
   const loadLogsForCompanies = async (companyIds) => {
     const uniqueIds = Array.from(new globalThis.Map(
       companyIds.filter(Boolean).map(id => [String(id), id])
@@ -3552,12 +3349,6 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
     if (!missingIds.length) {
       return { logsByCompany: companyLogs, failedCompanyIds: new Set() };
     }
-
-    setLoadingLogs(prev => {
-      const next = new Set(prev);
-      missingIds.forEach(id => next.add(id));
-      return next;
-    });
 
     const results = await Promise.allSettled(
       missingIds.map(id =>
@@ -3582,11 +3373,6 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
     });
 
     setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
-    setLoadingLogs(prev => {
-      const next = new Set(prev);
-      missingIds.forEach(id => next.delete(id));
-      return next;
-    });
 
     return { logsByCompany: { ...companyLogs, ...nextLogs }, failedCompanyIds };
   };
@@ -3725,75 +3511,12 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
     }
   };
 
-  const modalLogs = useMemo(() => {
-    const all = companyLogs[logModalCompany?.id] || [];
-    return all.slice(
-      (modalPage - 1) * MODAL_LOGS_PER_PAGE,
-      modalPage * MODAL_LOGS_PER_PAGE
-    );
-  }, [companyLogs, logModalCompany, modalPage]);
-
   if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
 
-  const openLogModal = (company) => {
-    setLogModalCompany(company);
-    setLogModalOpen(true);
-    setModalPage(1);
-    setModalExpandedDiffs(new Set());
-
-    if (companyLogs[company.id]) return;
-
-    setLoadingLogs(prev => new Set(prev).add(company.id));
-    fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
-      .then(r => r.json())
-      .then(json => {
-        if (json.status === 'success') {
-          fetchedRef.current.add(String(company.id));
-          setCompanyLogs(prev => ({ ...prev, [company.id]: json.data }));
-        }
-      })
-      .catch(err => console.error('Failed to fetch logs:', err))
-      .finally(() => {
-        setLoadingLogs(prev => {
-          const n = new Set(prev);
-          n.delete(company.id);
-          return n;
-        });
-      });
-  };
-
-  const toggleModalDiff = (logId) => {
-    setModalExpandedDiffs(prev => {
-      const next = new Set(prev);
-      if (next.has(logId)) next.delete(logId);
-      else next.add(logId);
-      return next;
-    });
-  };
-
-  const renderDiff = (oldRaw, newRaw) => {
-    const changes = getActivityChanges(oldRaw, newRaw);
-
-    if (!changes.length) return <em style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tidak ada perubahan field</em>;
-
-    return (
-      <table style={{ width: '100%', fontSize: '0.75rem', marginTop: '8px', borderCollapse: 'collapse' }}>
-        <thead><tr style={{ background: '#f1f5f9' }}>
-          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Field</th>
-          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Lama</th>
-          <th style={{ textAlign: 'left', padding: '4px 8px' }}>Baru</th>
-        </tr></thead>
-        <tbody>
-          {changes.map((c, idx) => (
-            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={{ padding: '4px 8px', fontWeight: 600 }}>{c.label}</td>
-              <td style={{ padding: '4px 8px', color: '#ef4444' }}>{c.old}</td>
-              <td style={{ padding: '4px 8px', color: '#22c55e' }}>{c.new}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
+  const openHistoryModal = (company, items) => {
+    setHistoryModalCompany(company);
+    setHistoryModalItems(items || []);
+    setHistoryModalOpen(true);
   };
 
   return (
@@ -3828,14 +3551,14 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
           </thead>
           <tbody>
             {currentData.map(group => (
-              <tr key={group.company.id} style={{ cursor: 'pointer' }} onClick={() => openLogModal(group.company)}>
+              <tr key={group.company.id} style={{ cursor: 'pointer' }} onClick={() => openHistoryModal(group.company, group.items)}>
                 <td style={{ fontWeight: 600, verticalAlign: 'middle' }}>{group.company.name}</td>
                 <td style={{ verticalAlign: 'middle' }}>{group.company.region_name}</td>
                 <td style={{ verticalAlign: 'middle' }}>{group.items.length} Produk</td>
                 <td style={{ verticalAlign: 'middle', textAlign: 'right' }}>
                   <button
                     className="btn btn-secondary"
-                    onClick={e => { e.stopPropagation(); openLogModal(group.company); }}
+                    onClick={e => { e.stopPropagation(); openHistoryModal(group.company, group.items); }}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem' }}
                   >
                     <Archive size={16} />
@@ -3850,74 +3573,12 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
         <Pagination totalItems={historicalGroups.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
 
-      {logModalOpen && logModalCompany && (
-        <div className="modal-overlay" onClick={() => setLogModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2>Log Aktivitas — {logModalCompany.name}</h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Region: {logModalCompany.region_name || '-'}</p>
-              </div>
-              <button className="close-btn" onClick={() => setLogModalOpen(false)}><X size={24} /></button>
-            </div>
-            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
-              {loadingLogs.has(logModalCompany.id) ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '40px 0', color: 'var(--text-muted)' }}>
-                  <Loader2 className="animate-spin" size={20} /> Memuat log aktivitas...
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {(companyLogs[logModalCompany.id] || []).length === 0 ? (
-                    <em style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
-                  ) : (
-                    <>
-                      {modalLogs.map((log) => (
-                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                            <span className={`badge ${getLogBadgeClass(log.action_type)}`}>{log.action_type}</span>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
-                          </div>
-                          <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                            <strong>Oleh:</strong> {log.user_name || 'System'}
-                          </div>
-                          {log.description && (
-                            <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '10px' }}>
-                              {log.description}
-                            </div>
-                          )}
-                          {(log.old_values || log.new_values) && (
-                            <>
-                              <button
-                                onClick={() => toggleModalDiff(log.id)}
-                                style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
-                              >
-                                {modalExpandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
-                              </button>
-                              {modalExpandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      <Pagination
-                        totalItems={(companyLogs[logModalCompany.id] || []).length}
-                        itemsPerPage={MODAL_LOGS_PER_PAGE}
-                        currentPage={modalPage}
-                        onPageChange={(page) => {
-                          setModalPage(page);
-                          setModalExpandedDiffs(new Set());
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setLogModalOpen(false)}>Tutup</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CompanyHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        company={historyModalCompany}
+        historyItems={historyModalItems}
+      />
     </div>
   );
 }
