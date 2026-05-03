@@ -819,8 +819,10 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
   const [filterDays, setFilterDays] = useState('90');
   const [scheduleField, setScheduleField] = useState('installation_date');
   const [currentPage, setCurrentPage] = useState(1);
+  const [birthdayPage, setBirthdayPage] = useState(1);
   const [expandedCompanies, setExpandedCompanies] = useState({});
   const [filterMonth, setFilterMonth] = useState('');
+  const [trendTooltip, setTrendTooltip] = useState(null);
 
   const selectedScheduleOption = DASHBOARD_SCHEDULE_FIELDS.find(option => option.value === scheduleField) || DASHBOARD_SCHEDULE_FIELDS[0];
 
@@ -970,8 +972,6 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
   const trendChartPadding = { top: 16, right: 16, bottom: 28, left: 28 };
   const trendAreaPath = buildAreaPath(trendSeries.points, 'total', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
   const trendTotalPath = buildLinePath(trendSeries.points, 'total', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
-  const trendOpenPath = buildLinePath(trendSeries.points, 'open', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
-  const trendDonePath = buildLinePath(trendSeries.points, 'done', trendChartWidth, trendChartHeight, trendChartPadding, trendSeries.maxValue);
   const trendTickStep = Math.max(1, Math.floor(trendSeries.points.length / 6));
 
   return (
@@ -1190,12 +1190,73 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               </div>
             ) : (
               <>
-                <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <svg viewBox={`0 0 ${trendChartWidth} ${trendChartHeight}`} style={{ minWidth: '640px', width: '100%', height: '220px' }}>
+                <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
+                  <svg
+                    viewBox={`0 0 ${trendChartWidth} ${trendChartHeight}`}
+                    style={{ minWidth: '640px', width: '100%', height: '220px', cursor: 'crosshair' }}
+                    onMouseMove={(e) => {
+                      const svgRect = e.currentTarget.getBoundingClientRect();
+                      const scaleX = trendChartWidth / svgRect.width;
+                      const mouseX = (e.clientX - svgRect.left) * scaleX;
+                      const innerW = trendChartWidth - trendChartPadding.left - trendChartPadding.right;
+                      const relativeX = mouseX - trendChartPadding.left;
+                      const step = innerW / (trendSeries.points.length - 1 || 1);
+                      const idx = Math.max(0, Math.min(Math.round(relativeX / step), trendSeries.points.length - 1));
+                      const pt = trendSeries.points[idx];
+                      setTrendTooltip({
+                        x: e.clientX + 12,
+                        y: e.clientY - 12,
+                        point: pt,
+                        svgX: trendChartPadding.left + (innerW * (trendSeries.points.length === 1 ? 0 : idx / (trendSeries.points.length - 1)))
+                      });
+                    }}
+                    onMouseLeave={() => setTrendTooltip(null)}
+                  >
+                    {/* Garis X-axis */}
+                    <line
+                      x1={trendChartPadding.left}
+                      y1={trendChartHeight - trendChartPadding.bottom}
+                      x2={trendChartWidth - trendChartPadding.right}
+                      y2={trendChartHeight - trendChartPadding.bottom}
+                      stroke="#cbd5e1"
+                      strokeWidth="1"
+                    />
+                    {/* Garis Y-axis */}
+                    <line
+                      x1={trendChartPadding.left}
+                      y1={trendChartPadding.top}
+                      x2={trendChartPadding.left}
+                      y2={trendChartHeight - trendChartPadding.bottom}
+                      stroke="#cbd5e1"
+                      strokeWidth="1"
+                    />
+                    {/* Y-axis tick labels */}
+                    {(() => {
+                      const max = Math.max(1, trendSeries.maxValue);
+                      const ticks = [];
+                      if (max <= 1) {
+                        ticks.push(0, 1);
+                      } else if (max <= 4) {
+                        for (let v = 0; v <= max; v++) ticks.push(v);
+                      } else {
+                        const step = Math.max(1, Math.round(max / 4));
+                        for (let v = 0; v < max; v += step) ticks.push(v);
+                        ticks.push(max);
+                      }
+                      // Deduplicate
+                      const uniqueTicks = [...new Set(ticks)].sort((a, b) => a - b);
+                      return uniqueTicks.map(value => {
+                        const y = trendChartPadding.top + ((trendChartHeight - trendChartPadding.top - trendChartPadding.bottom) * (1 - value / max));
+                        return (
+                          <g key={value}>
+                            <line x1={trendChartPadding.left - 5} y1={y} x2={trendChartPadding.left} y2={y} stroke="#cbd5e1" strokeWidth="1" />
+                            <text x={trendChartPadding.left - 8} y={y + 4} textAnchor="end" fontSize="9" fill="#94a3b8">{value}</text>
+                          </g>
+                        );
+                      });
+                    })()}
                     <path d={trendAreaPath} fill="rgba(14, 165, 233, 0.15)" />
                     <path d={trendTotalPath} fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d={trendOpenPath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />
-                    <path d={trendDonePath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     {trendSeries.points.map((point, index) => {
                       if (index % trendTickStep !== 0 && !point.isToday) return null;
                       const innerW = trendChartWidth - trendChartPadding.left - trendChartPadding.right;
@@ -1209,12 +1270,50 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                         </g>
                       );
                     })}
+                    {/* Vertical hover line */}
+                    {trendTooltip && (
+                      <line
+                        x1={trendTooltip.svgX}
+                        y1={trendChartPadding.top}
+                        x2={trendTooltip.svgX}
+                        y2={trendChartHeight - trendChartPadding.bottom}
+                        stroke="#94a3b8"
+                        strokeWidth="1"
+                        strokeDasharray="4 4"
+                        opacity="0.6"
+                      />
+                    )}
                   </svg>
+                  {/* Tooltip */}
+                  {trendTooltip && (
+                    <div style={{
+                      position: 'fixed',
+                      left: trendTooltip.x,
+                      top: trendTooltip.y,
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 100,
+                      fontSize: '0.82rem',
+                      pointerEvents: 'none',
+                      minWidth: '140px'
+                    }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '6px', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px' }}>
+                        {trendTooltip.point.isToday ? 'Hari Ini' : trendTooltip.point.key}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0ea5e9' }} />
+                          <span>Total: <strong>{trendTooltip.point.total}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '10px', fontSize: '0.78rem', color: '#475569' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#0ea5e9' }} /> Total</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#f59e0b' }} /> Open</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '3px', borderRadius: '999px', background: '#10b981' }} /> Done</span>
                 </div>
               </>
             )}
@@ -1295,7 +1394,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {birthdaysThisMonth.map(p => (
+                {birthdaysThisMonth.slice((birthdayPage - 1) * ITEMS_PER_PAGE, birthdayPage * ITEMS_PER_PAGE).map(p => (
                   <div key={p.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#fdf4ff', borderRadius: '16px', border: '1px solid #f5d0fe' }}>
                     <div style={{ background: 'white', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c026d3', fontWeight: 800 }}>
                       {p.dob.split('-')[2]}
@@ -1309,6 +1408,9 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                     </a>
                   </div>
                 ))}
+                {birthdaysThisMonth.length > ITEMS_PER_PAGE && (
+                  <Pagination totalItems={birthdaysThisMonth.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={birthdayPage} onPageChange={setBirthdayPage} />
+                )}
               </div>
             )}
           </div>
@@ -2078,7 +2180,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                       <Settings size={14} style={{ marginRight: '4px' }} /> Edit Semua
                     </button>
                   )}
-                  {(can('installation_transfer') || can('sales_update')) && (
+                  {can('installation_transfer') && (
                     <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={e => { e.stopPropagation(); setTransferTarget({ companyId: group.company.id, companyName: group.company.name, fromUserId: group.items[0]?.assigned_to, fromUserName: group.items[0]?.assigned_to_name, installationId: null }); setTransferOpen(true); }}>
                       Transfer
                     </button>
@@ -2104,6 +2206,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                            <th>Status</th>
                            <th>Status Data</th>
                            <th>PIC Sales</th>
+                           <th>Total Renew</th>
                            <th>Audit</th>
                            <th>Aksi</th>
                         </tr>
@@ -2126,11 +2229,12 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                               </td>
                               <td>{row.followup_date || '-'}</td>
                               <td>{row.visit_schedule_date || '-'}</td>
-                              <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
-                              <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
-                              <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
-                              <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
-                              <td>
+                               <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
+                               <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
+                               <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
+                               <td><div style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.9rem' }}>{row.renew_count || 0}</div></td>
+                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
+                               <td>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                   {can('sales_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => openGroupEdit(group.company, [row])}>Edit</button>}
                                   {can('sales_update') && row.status !== 'Done' && <button className="btn" style={{ padding: '4px 8px', fontSize: '11px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }} onClick={() => openRenew(row)}>Renew</button>}
@@ -2445,17 +2549,23 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
 
 
-function InstallationPage({ installations, companies, regions, can, currentUser, setInstallations }) {
-  const [filterCompanies, setFilterCompanies] = useState([]);
-  const [companySearch, setCompanySearch] = useState('');
+function InstallationPage({ installations, regions, can, currentUser, setInstallations }) {
   const [editModal, setEditModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [filterType, setFilterType] = useState('');
+  const [filterRegions, setFilterRegions] = useState([]);
+  const [regionSearch, setRegionSearch] = useState('');
+  const [expandedCompanies, setExpandedCompanies] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const todayStr = getLocalDateString();
+  const [filterInstallStart, setFilterInstallStart] = useState(todayStr);
+  const [filterInstallEnd, setFilterInstallEnd] = useState(calculateNextDate(todayStr, '7', 'days'));
   // Transfer state
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState({ companyId: '', companyName: '', fromUserId: '', fromUserName: '' });
-
-  if (!can('installation_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   const reloadInstallations = async () => {
     try {
@@ -2499,123 +2609,197 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
       if (d.status === 'success') {
         setInstallations(prev => prev.map(i => i.id === editData.id ? { ...i, ...editData, last_editor_name: currentUser?.username } : i));
         setEditModal(false);
+        setEditData(null);
       } else {
         alert(d.message);
       }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
-  const filteredData = installations.filter(i => {
-    if (Number(i.is_history) === 1) return false;
-    if (filterCompanies.length > 0 && !filterCompanies.includes(String(i.company_id))) return false;
-    return true;
-  });
+  const toggleExpand = (companyId) => {
+    setExpandedCompanies(prev => ({ ...prev, [companyId]: !prev[companyId] }));
+  };
 
-  const columns = [
-    {
-      header: 'Klien', accessor: 'company_name', render: (row) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{row.company_name}</div>
-          <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{row.region} | {row.company_type}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Produk Terpasang', accessor: 'product_name', render: (row) => (
-        <strong style={{ color: '#0369a1' }}>{row.product_name}</strong>
-      )
-    },
-    { header: 'Tgl Instalasi', accessor: 'installation_date' },
-    {
-      header: 'Siklus Ganti', render: (row) => (
-        <span>Tiap {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</span>
-      )
-    },
-    {
-      header: 'Target Selanjutnya', accessor: 'replacement_date', render: (row) => {
-        const diff = Math.ceil((new Date(row.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-        return (
-          <div style={{ color: diff < 0 ? '#ef4444' : diff <= 30 ? '#f59e0b' : 'inherit' }}>
-            <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
-            <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff} Hari`}</div>
-          </div>
-        );
+  const activeInstallations = useMemo(() => installations.filter(i => {
+    if (Number(i.is_history) === 1) return false;
+    if (!showInactive && (i.status_active === '0' || Number(i.status_active) === 0)) return false;
+    if (filterType && i.company_type !== filterType) return false;
+    if (filterRegions.length > 0 && !filterRegions.includes(i.region)) return false;
+    if (filterInstallStart && i.installation_date && i.installation_date < filterInstallStart) return false;
+    if (filterInstallEnd && i.installation_date && i.installation_date > filterInstallEnd) return false;
+    return true;
+  }), [installations, showInactive, filterType, filterRegions, filterInstallStart, filterInstallEnd]);
+
+  const groupedByCompany = useMemo(() => {
+    const groups = {};
+    activeInstallations.forEach(inst => {
+      if (searchTerm && !inst.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) && !inst.product_name?.toLowerCase().includes(searchTerm.toLowerCase())) return;
+      const cid = inst.company_id;
+      if (!groups[cid]) {
+        groups[cid] = {
+          company: { id: cid, name: inst.company_name, type: inst.company_type, region: inst.region },
+          items: [], activeCount: 0, inactiveCount: 0
+        };
       }
-    },
-    {
-      header: 'Status', accessor: 'status', render: (row) => (
-        can('installation_update') ? (
-          <select className="form-control" style={{ width: '155px', padding: '4px', fontSize: '0.75rem' }} value={row.status} onChange={(e) => updateStatus(row.id, e.target.value)}>
-            {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
-          </select>
-        ) : (
-          <span className={`badge ${row.status === 'Done' ? 'badge-success' : 'badge-info'}`}>{row.status}</span>
-        )
-      )
-    },
-    {
-      header: 'PIC Sales', render: (row) => (
-        <div style={{ fontSize: '11px' }}>
-          <div style={{ fontWeight: 600, color: '#0369a1' }}>{row.assigned_to_name || '-'}</div>
-          <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>Oleh: {row.creator_name || '-'}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Aksi', render: (row) => (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {can('installation_update') && (
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => { setEditData({ ...row }); setEditModal(true); }}>Edit</button>
-          )}
-          {(can('installation_transfer') || can('installation_update')) && (
-            <button className="btn" style={{ padding: '4px 10px', fontSize: '11px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>
-          )}
-        </div>
-      )
-    }
-  ];
+      groups[cid].items.push(inst);
+      if (inst.status_active === '0' || Number(inst.status_active) === 0) groups[cid].inactiveCount++;
+      else groups[cid].activeCount++;
+    });
+    return Object.values(groups).sort((a, b) => a.company.name.localeCompare(b.company.name));
+  }, [activeInstallations, searchTerm]);
+
+  const ITEMS_PER_PAGE = 10;
+  const currentGroups = groupedByCompany.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  if (!can('installation_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Monitoring Data Instalasi Aktif</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', flex: 1, minWidth: '220px' }}>
-            <Filter size={16} color="#64748b" />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {filterCompanies.map(cid => {
-                const c = companies.find(comp => String(comp.id) === cid);
-                return (
-                  <span key={cid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
-                    {c?.name || cid}
-                    <button onClick={() => setFilterCompanies(filterCompanies.filter(id => id !== cid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
-                  </span>
-                );
-              })}
-            </div>
-            <input list="inst-company-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '140px' }} placeholder="Filter Company..." value={companySearch} onChange={e => {
-              setCompanySearch(e.target.value);
-              const found = companies.find(c => c.name.toLowerCase() === e.target.value.toLowerCase());
-              if (found && !filterCompanies.includes(String(found.id))) {
-                setFilterCompanies([...filterCompanies, String(found.id)]);
-                setCompanySearch('');
-              }
-            }} />
-            <datalist id="inst-company-list">{companies.map(c => <option key={c.id} value={c.name} />)}</datalist>
+      <h1 className="page-title" style={{ margin: '0 0 16px 0' }}>Monitoring Data Instalasi Aktif</h1>
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap', marginBottom: '24px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
+          Tampilkan Nonaktif
+        </label>
+        <select className="form-control" style={{ padding: '8px 12px', fontSize: '0.875rem', width: '145px' }} value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="">Semua Tipe...</option>
+          {COMPANY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', minWidth: '140px' }}>
+          <Filter size={16} color="#64748b" />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {filterRegions.map(rid => (
+              <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
+                {rid}
+                <button onClick={() => setFilterRegions(filterRegions.filter(id => id !== rid))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
+              </span>
+            ))}
           </div>
+          <input list="inst-region-list" className="form-control" style={{ border: 'none', padding: '8px 12px', fontSize: '0.875rem', flex: 1, minWidth: '120px' }} placeholder="Filter Region..." value={regionSearch} onChange={e => {
+            const val = e.target.value;
+            setRegionSearch(val);
+            if (regions.find(r => r.region_name.toLowerCase() === val.toLowerCase()) && !filterRegions.includes(val)) {
+              setFilterRegions([...filterRegions, val]);
+              setRegionSearch('');
+            }
+          }} />
+          <datalist id="inst-region-list">{regions.map(r => <option key={r.id} value={r.region_name} />)}</datalist>
         </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+            <Calendar size={16} color="#64748b" />
+            <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>Tgl Instalasi</span>
+            <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallStart} onChange={e => { setFilterInstallStart(e.target.value); setCurrentPage(1); }} />
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>s/d</span>
+            <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallEnd} onChange={e => { setFilterInstallEnd(e.target.value); setCurrentPage(1); }} />
+          </div>
       </div>
 
-      <div className="card-view" style={{ padding: '20px' }}>
-        <DataTable data={filteredData} columns={columns} fileName="active-installations" />
+      <div className="card-view" style={{ padding: '20px', marginTop: '0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input className="form-control" style={{ padding: '12px 14px 12px 40px', width: '100%' }} placeholder="Cari klien atau produk..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
+          </div>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', alignSelf: 'center' }}>Menampilkan {groupedByCompany.length} klien</span>
+        </div>
+
+        {currentGroups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
+            <Database size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p style={{ margin: 0 }}>Tidak ada data ditemukan.</p>
+          </div>
+        ) : currentGroups.map(group => {
+          const isExpanded = expandedCompanies[group.company.id];
+          const nearExpiry = group.items.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length;
+          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && Number(i.is_history) === 1).length;
+          return (
+            <div key={group.company.id} style={{ marginBottom: '12px', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', background: 'white', transition: 'all 0.2s', boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.06)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', cursor: 'pointer', background: isExpanded ? '#f8fafc' : 'white', gap: '16px', transition: 'background 0.2s' }} onClick={() => toggleExpand(group.company.id)}>
+                <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  <ChevronRight size={18} color="#64748b" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{group.company.name}</span>
+                    <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>{group.company.type}</span>
+                    {historyCount > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>{historyCount} Riwayat</span>}
+                    {nearExpiry > 0 && <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>{nearExpiry} akan habis</span>}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}><MapPin size={12} style={{ verticalAlign: 'middle' }} /> {group.company.region || '-'}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700 }}>{group.items.length} Produk</span>
+                </div>
+              </div>
+              {isExpanded && (
+                <div style={{ borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table" style={{ margin: 0 }}>
+                      <thead style={{ background: '#f8fafc' }}>
+                        <tr>
+                          <th>Produk</th>
+                          <th>Tgl Instalasi</th>
+                          <th>Siklus</th>
+                          <th>Target Ganti</th>
+                          <th>Tgl Follow Up</th>
+                          <th>Visit Schedule</th>
+                          <th>Status</th>
+                          <th>Status Data</th>
+                          <th>PIC Sales</th>
+                          <th>Total Renew</th>
+                          <th>Audit</th>
+                          <th>Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map(row => {
+                          const diff = Math.ceil((new Date(row.replacement_date) - new Date()) / 86400000);
+                          const isInactive = row.status_active === '0' || Number(row.status_active) === 0;
+                          return (
+                            <tr key={row.id} style={{ opacity: isInactive ? 0.5 : 1 }}>
+                              <td><strong style={{ color: '#0369a1' }}>{row.product_name}</strong></td>
+                              <td>{row.installation_date || '-'}</td>
+                              <td>Tiap {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</td>
+                              <td>
+                                <div style={{ color: diff < 0 ? '#ef4444' : diff <= 30 ? '#f59e0b' : 'inherit' }}>
+                                  <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
+                                  <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff}`}</div>
+                                </div>
+                              </td>
+                              <td>{row.followup_date || '-'}</td>
+                              <td>{row.visit_schedule_date || '-'}</td>
+                              <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
+                              <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
+                              <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
+                              <td><div style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.9rem' }}>{row.renew_count || 0}</div></td>
+                              <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                  {can('installation_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => { setEditData({ ...row }); setEditModal(true); }}>Edit</button>}
+                                  {can('installation_transfer') && <button className="btn" style={{ padding: '4px 8px', fontSize: '11px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <Pagination totalItems={groupedByCompany.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
 
-      {editModal && editData && (
-        <div className="modal-overlay" onClick={() => setEditModal(false)}>
+      {/* Single Item Edit Modal */}
+      {editModal && editData && !editCompany && (
+        <div className="modal-overlay" onClick={() => { setEditModal(false); setEditData(null); }}>
           <div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Edit Detail Instalasi</h2>
-              <button className="close-btn" onClick={() => setEditModal(false)}><X size={24} /></button>
+              <button className="close-btn" onClick={() => { setEditModal(false); setEditData(null); }}><X size={24} /></button>
             </div>
             <form onSubmit={handleEditSave}>
               <div className="modal-body">
@@ -2645,7 +2829,7 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditModal(false)}>Batal</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setEditModal(false); setEditData(null); }}>Batal</button>
                 <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
               </div>
             </form>
@@ -2663,6 +2847,7 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
         fromUserName={transferTarget.fromUserName}
         currentUser={currentUser}
         onTransferDone={reloadInstallations}
+        installationId={transferTarget.installationId}
       />
     </div>
   );
@@ -3146,7 +3331,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       header: 'Aksi', render: (row) => (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           <button className="btn btn-primary" style={{ padding: '5px 10px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => openRenewForm(row.id)}>🔄 Renew</button>
-          {(can('installation_transfer') || can('installation_update')) && (
+          {can('installation_transfer') && (
             <button className="btn" style={{ padding: '5px 10px', fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>
           )}
         </div>
@@ -4179,7 +4364,7 @@ export default function App() {
                 <Route path="/pic" element={can('pic_read') ? <PICPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} companies={companies} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <div className="page-container">Akses Ditolak</div>} />
+                <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />

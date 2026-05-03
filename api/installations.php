@@ -129,11 +129,11 @@ if ($action === 'list') {
     $show_all = isset($_GET['show_all']) ? $_GET['show_all'] === 'true' : true;
 
     try {
-        $base_query = "SELECT i.*, c.name as company_name, ct.type_name as company_type, r.region_name as region, 
-                       u.username as creator_name, u2.username as last_editor_name, 
+        $base_query = "SELECT i.*, c.name as company_name, ct.type_name as company_type, r.region_name as region,
+                       u.username as creator_name, u2.username as last_editor_name,
                        u3.username as assigned_to_name
-                       FROM installations i 
-                       LEFT JOIN companies c ON i.company_id = c.id 
+                       FROM installations i
+                       LEFT JOIN companies c ON i.company_id = c.id
                        LEFT JOIN company_types ct ON c.type_id = ct.id
                        LEFT JOIN regions r ON c.region_id = r.id
                        LEFT JOIN users u ON i.created_by = u.id
@@ -369,8 +369,8 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $final_cycle_unit = $new_cycle_unit ?: $current['maintenance_cycle_unit'];
         $keep_assigned_to = $current['assigned_to'] ?: $user_id;
         
-        $stmtNew = $pdo->prepare("INSERT INTO installations (company_id, product_name, installation_date, replacement_date, maintenance_cycle_value, maintenance_cycle_unit, status, notes, created_by, assigned_to) 
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmtNew = $pdo->prepare("INSERT INTO installations (company_id, product_name, installation_date, replacement_date, maintenance_cycle_value, maintenance_cycle_unit, status, notes, created_by, assigned_to, renew_count)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmtNew->execute([
             $current['company_id'],
             $final_product,
@@ -381,7 +381,8 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'Scheduled',
             $renew_notes ? 'Perpanjangan: ' . $renew_notes : null,
             $user_id,
-            $keep_assigned_to  // Keep same assigned_to from old record
+            $keep_assigned_to,  // Keep same assigned_to from old record
+            ($current['renew_count'] ?? 0) + 1
         ]);
         $newRecordId = $pdo->lastInsertId();
         $newSnapshot = getInstallationAuditSnapshot($pdo, $newRecordId);
