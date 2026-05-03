@@ -820,6 +820,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
   const [scheduleField, setScheduleField] = useState('installation_date');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedCompanies, setExpandedCompanies] = useState({});
+  const [filterMonth, setFilterMonth] = useState('');
 
   const selectedScheduleOption = DASHBOARD_SCHEDULE_FIELDS.find(option => option.value === scheduleField) || DASHBOARD_SCHEDULE_FIELDS[0];
 
@@ -910,21 +911,42 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
 
   const workloadByRegion = useMemo(() => {
     const map = {};
+    const companySets = {};
     dashboardBaseItems.forEach(item => {
-      const region = item.comp?.region_name || '-';
-      if (!map[region]) map[region] = { region, total: 0, open: 0, overdue: 0, urgent: 0 };
-      map[region].total += 1;
-      if (item.status !== 'Done') {
-        map[region].open += 1;
-        if (item.diffDays < 0) map[region].overdue += 1;
-        if (item.diffDays <= 7) map[region].urgent += 1;
+      // Filter by selected month if any
+      if (filterMonth) {
+        const dateValue = item[scheduleField];
+        if (!dateValue || !dateValue.startsWith(filterMonth)) return;
       }
+
+      const region = item.comp?.region_name || '-';
+      if (!map[region]) {
+        map[region] = { region, totalProducts: 0, totalCustomers: 0 };
+        companySets[region] = new Set();
+      }
+      map[region].totalProducts += 1;
+      companySets[region].add(item.company_id);
     });
 
-    const rows = Object.values(map).sort((a, b) => b.open - a.open);
-    const maxOpen = Math.max(1, ...rows.map(row => row.open));
-    return { rows, maxOpen };
-  }, [dashboardBaseItems]);
+    const rows = Object.keys(map).map(region => ({
+      ...map[region],
+      totalCustomers: companySets[region].size
+    })).sort((a, b) => b.totalProducts - a.totalProducts);
+
+    const maxProducts = Math.max(1, ...rows.map(row => row.totalProducts));
+    return { rows, maxProducts };
+  }, [dashboardBaseItems, filterMonth, scheduleField]);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set();
+    dashboardBaseItems.forEach(item => {
+      const dateValue = item[scheduleField];
+      if (dateValue && typeof dateValue === 'string' && dateValue.length >= 7) {
+        months.add(dateValue.slice(0, 7)); // YYYY-MM
+      }
+    });
+    return Array.from(months).sort();
+  }, [dashboardBaseItems, scheduleField]);
 
   if (!can('dashboard_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>dashboard_read</code> untuk melihat ringkasan ini.</p></div>;
 
@@ -1072,7 +1094,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                     padding: '18px 20px',
                     cursor: 'pointer',
                     background: isExpanded ? '#f8fafc' : 'white',
-                    borderLeft: group.minDiffDays <= 7 ? '4px solid #ef4444' : group.minDiffDays <= 14 ? '4px solid #f59e0b' : '4px solid #cbd5e1'
+                    borderLeft: '4px solid #cbd5e1'
                   }}
                 >
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
@@ -1093,10 +1115,6 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', minWidth: '140px' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Urgensi Tertinggi</div>
-                    <div style={{ marginTop: '4px', fontSize: '0.95rem', fontWeight: 800, color: group.minDiffDays <= 7 ? '#ef4444' : '#f59e0b' }}>
-                      {formatDiffDaysLabel(group.minDiffDays)}
-                    </div>
                     <div style={{ marginTop: '6px', fontSize: '0.76rem', color: '#64748b' }}>
                       {isExpanded ? 'Sembunyikan detail' : 'Lihat detail product'}
                     </div>
@@ -1119,7 +1137,6 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                               </th>
                             ))}
                             <th>Status</th>
-                            <th>Urgensi</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1141,9 +1158,6 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
                                 <span className={`badge ${item.status === 'Done' ? 'badge-success' : item.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>
                                   {item.status}
                                 </span>
-                              </td>
-                              <td style={{ fontWeight: 700, color: item.diffDays !== null && item.diffDays <= 7 ? '#ef4444' : '#f59e0b' }}>
-                                {formatDiffDaysLabel(item.diffDays)}
                               </td>
                             </tr>
                           ))}
@@ -1213,33 +1227,47 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               <MapPin size={18} /> Workload per Region
             </h2>
             <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-              Distribusi beban open task berdasarkan region
+              Total customer & product berdasarkan region
             </p>
+            {availableMonths.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <select
+                  className="form-control"
+                  style={{ width: '100%' }}
+                  value={filterMonth}
+                  onChange={e => setFilterMonth(e.target.value)}
+                >
+                  <option value="">Semua Bulan</option>
+                  {availableMonths.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div style={{ padding: '16px 20px 20px 20px' }}>
             {workloadByRegion.rows.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '28px 8px', color: '#94a3b8' }}>
-                Tidak ada data workload region.
+                Tidak ada data untuk filter ini.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {workloadByRegion.rows.map(row => {
-                  const pct = Math.round((row.open / workloadByRegion.maxOpen) * 100);
-                  const overduePct = row.open > 0 ? Math.round((row.overdue / row.open) * 100) : 0;
+                  const pct = Math.round((row.totalProducts / workloadByRegion.maxProducts) * 100);
                   return (
                     <div key={row.region} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 12px', background: '#fff' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                         <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.region}</div>
                         <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                          Open: <strong style={{ color: '#0f172a' }}>{row.open}</strong> / Total: <strong style={{ color: '#0f172a' }}>{row.total}</strong>
+                          <strong style={{ color: '#0f172a' }}>{row.totalProducts}</strong> Produk
                         </div>
                       </div>
                       <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: row.overdue > 0 ? 'linear-gradient(to right, #f59e0b, #ef4444)' : 'linear-gradient(to right, #0ea5e9, #0284c7)', borderRadius: '999px' }} />
+                        <div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(to right, #0ea5e9, #0284c7)', borderRadius: '999px' }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#64748b' }}>
-                        <span>Urgent (&lt;=7d): <strong style={{ color: '#b45309' }}>{row.urgent}</strong></span>
-                        <span>Overdue: <strong style={{ color: row.overdue > 0 ? '#dc2626' : '#16a34a' }}>{row.overdue} ({overduePct}%)</strong></span>
+                        <span>Customer: <strong style={{ color: '#0f172a' }}>{row.totalCustomers}</strong></span>
+                        <span>Product: <strong style={{ color: '#0f172a' }}>{row.totalProducts}</strong></span>
                       </div>
                     </div>
                   );
