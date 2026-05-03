@@ -1730,9 +1730,15 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   const [currentPage, setCurrentPage] = useState(1);
   const [renewModal, setRenewModal] = useState(false);
   const [renewData, setRenewData] = useState(null);
-  const [historyModal, setHistoryModal] = useState(false);
-  const [historyCompany, setHistoryCompany] = useState(null);
-  const [historyItems, setHistoryItems] = useState([]);
+  const [companyLogs, setCompanyLogs] = useState({});
+  const [loadingLogs, setLoadingLogs] = useState(new Set());
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logModalCompany, setLogModalCompany] = useState(null);
+  const [modalExpandedDiffs, setModalExpandedDiffs] = useState(new Set());
+  const [modalPage, setModalPage] = useState(1);
+  const [modalProductFilter, setModalProductFilter] = useState('');
+  const MODAL_LOGS_PER_PAGE = 10;
+  const fetchedSalesRef = useRef(new Set());
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState({});
 
@@ -1896,21 +1902,41 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
-  const openHistory = async (companyId, companyName) => {
-    setHistoryCompany(companyName);
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${companyId}`);
-      const data = await res.json();
-      if (data.status === 'success') {
-        setHistoryItems(data.data);
-      } else {
-        setHistoryItems([]);
-      }
-    } catch (e) {
-      console.error(e);
-      setHistoryItems([]);
-    }
-    setHistoryModal(true);
+  const openLogModal = (company, items) => {
+    setLogModalCompany({ ...company, products: items || [] });
+    setLogModalOpen(true);
+    setModalPage(1);
+    setModalExpandedDiffs(new Set());
+    setModalProductFilter('');
+
+    if (companyLogs[company.id]) return;
+
+    setLoadingLogs(prev => new Set(prev).add(company.id));
+    fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.status === 'success') {
+          fetchedSalesRef.current.add(String(company.id));
+          setCompanyLogs(prev => ({ ...prev, [company.id]: json.data }));
+        }
+      })
+      .catch(err => console.error('Failed to fetch logs:', err))
+      .finally(() => {
+        setLoadingLogs(prev => {
+          const n = new Set(prev);
+          n.delete(company.id);
+          return n;
+        });
+      });
+  };
+
+  const toggleModalDiff = (logId) => {
+    setModalExpandedDiffs(prev => {
+      const next = new Set(prev);
+      if (next.has(logId)) next.delete(logId);
+      else next.add(logId);
+      return next;
+    });
   };
 
   const activeInstallations = useMemo(() => installations.filter(i => {
@@ -1941,6 +1967,52 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
   const ITEMS_PER_PAGE = 10;
   const currentGroups = groupedByCompany.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  useEffect(() => {
+    if (!currentGroups.length) return;
+    const missingIds = currentGroups
+      .map(g => g.company.id)
+      .filter(id => !fetchedSalesRef.current.has(String(id)));
+    if (!missingIds.length) return;
+
+    missingIds.forEach(id => fetchedSalesRef.current.add(String(id)));
+    setLoadingLogs(prev => {
+      const next = new Set(prev);
+      missingIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    Promise.allSettled(
+      missingIds.map(id =>
+        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
+          .then(r => r.json())
+      )
+    ).then(results => {
+      const nextLogs = {};
+      results.forEach((res, idx) => {
+        const companyId = missingIds[idx];
+        nextLogs[companyId] = (res.status === 'fulfilled' && res.value.status === 'success')
+          ? res.value.data : [];
+      });
+      setCompanyLogs(prev => ({ ...prev, ...nextLogs }));
+      setLoadingLogs(prev => {
+        const next = new Set(prev);
+        missingIds.forEach(id => next.delete(id));
+        return next;
+      });
+    });
+  }, [currentGroups]);
+
+  const modalLogs = useMemo(() => {
+    let all = companyLogs[logModalCompany?.id] || [];
+    if (modalProductFilter) {
+      all = all.filter(log => String(log.installation_id) === String(modalProductFilter));
+    }
+    return all.slice(
+      (modalPage - 1) * MODAL_LOGS_PER_PAGE,
+      modalPage * MODAL_LOGS_PER_PAGE
+    );
+  }, [companyLogs, logModalCompany, modalPage, modalProductFilter]);
 
 
   return (
@@ -2061,7 +2133,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                       Transfer
                     </button>
                   )}
-                  <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }} onClick={e => { e.stopPropagation(); openHistory(group.company.id, group.company.name); }}>
+                  <button className="btn" style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }} onClick={e => { e.stopPropagation(); openLogModal(group.company, group.items); }}>
                     <Archive size={14} style={{ marginRight: '4px' }} /> History
                   </button>
                 </div>
@@ -2079,10 +2151,11 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                           <th>Target Ganti</th>
                           <th>Tgl Follow Up</th>
                           <th>Visit Schedule</th>
-                          <th>Status</th>
-                          <th>Status Data</th>
-                          <th>Audit</th>
-                          <th>Aksi</th>
+                           <th>Status</th>
+                           <th>Status Data</th>
+                           <th>PIC Sales</th>
+                           <th>Audit</th>
+                           <th>Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2105,6 +2178,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                               <td>{row.visit_schedule_date || '-'}</td>
                               <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
                               <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
+                              <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -2399,90 +2473,85 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         </div>
       )}
 
-      {historyModal && (
-        <div className="modal-overlay" onClick={() => setHistoryModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '900px', width: '95%' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
+      {logModalOpen && logModalCompany && (
+        <div className="modal-overlay" onClick={() => setLogModalOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
               <div>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Archive size={22} /> Riwayat Aktivitas Instalasi
-                </h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Log perubahan produk, status, dan jadwal kunjungan untuk: <strong>{historyCompany}</strong></p>
+                <h2>Log Aktivitas — {logModalCompany.name}</h2>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Region: {logModalCompany.region || '-'}</p>
               </div>
-              <button className="close-btn" onClick={() => setHistoryModal(false)}><X size={24} /></button>
+              <button className="close-btn" onClick={() => setLogModalOpen(false)}><X size={24} /></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              {historyItems.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-                  <Archive size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                  <p style={{ margin: 0, fontWeight: 600 }}>Belum ada riwayat aktivitas untuk klien ini.</p>
+            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
+              {logModalCompany.products && logModalCompany.products.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <select
+                    className="form-control"
+                    value={modalProductFilter}
+                    onChange={e => { setModalProductFilter(e.target.value); setModalPage(1); }}
+                  >
+                    <option value="">Semua Produk</option>
+                    {logModalCompany.products.map(p => (
+                      <option key={p.id} value={p.id}>{p.product_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {loadingLogs.has(logModalCompany.id) ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <Loader2 className="animate-spin" size={20} /> Memuat log aktivitas...
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {historyItems.map((item, idx) => {
-                    const oldValues = parseActivityPayload(item.old_values);
-                    const newValues = parseActivityPayload(item.new_values);
-                    const hasOldValues = oldValues.length > 0;
-                    const hasNewValues = newValues.length > 0;
-
-                    return (
-                      <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: idx % 2 === 0 ? '#f8fafc' : 'white', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
-                          {idx + 1}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                            <div>
-                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {item.action_type === 'CREATE' && <span className="badge badge-info" style={{ fontSize: '9px' }}>ADD</span>}
-                                {item.action_type === 'EDIT' && <span className="badge badge-warning" style={{ fontSize: '9px' }}>EDIT</span>}
-                                {item.action_type === 'RENEW' && <span className="badge badge-success" style={{ fontSize: '9px' }}>RENEW</span>}
-                                {item.action_type === 'STATUS_CHANGE' && <span className="badge" style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e' }}>STATUS</span>}
-                                {item.action_type === 'SCHEDULE_VISIT' && <span className="badge" style={{ fontSize: '9px', background: '#dcfce7', color: '#166534' }}>VISIT</span>}
-                                {item.action_type === 'TOGGLE' && <span className="badge" style={{ fontSize: '9px', background: '#e2e8f0', color: '#475569' }}>STATUS</span>}
-                                {item.description}
-                              </div>
-                              <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                                Tanggal: {new Date(item.created_at).toLocaleString('id-ID')}
-                              </div>
-                            </div>
+                  {(companyLogs[logModalCompany.id] || []).length === 0 ? (
+                    <em style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
+                  ) : (
+                    <>
+                      {modalLogs.map((log) => (
+                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                            <span className={`badge ${getLogBadgeClass(log.action_type)}`}>{log.action_type}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
                           </div>
-                          {(hasOldValues || hasNewValues) && (
-                            <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: hasOldValues && hasNewValues ? '1fr 1fr' : '1fr', gap: '12px' }}>
-                              {hasOldValues && (
-                                <div>
-                                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sebelum</div>
-                                  <div style={{ display: 'grid', gap: '6px' }}>
-                                    {oldValues.map(entry => (
-                                      <div key={`old-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {hasNewValues && (
-                                <div>
-                                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Sesudah</div>
-                                  <div style={{ display: 'grid', gap: '6px' }}>
-                                    {newValues.map(entry => (
-                                      <div key={`new-${entry.key}`}><strong>{entry.label}:</strong> {entry.value}</div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                          <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                            <strong>Oleh:</strong> {log.user_name || 'System'}
+                          </div>
+                          {log.description && (
+                            <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '10px' }}>
+                              {log.description}
                             </div>
                           )}
-                          <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <User size={12} /> Oleh: <strong style={{ color: '#64748b' }}>{item.user_name || 'System'}</strong>
-                          </div>
+                          {(log.old_values || log.new_values) && (
+                            <>
+                              <button
+                                onClick={() => toggleModalDiff(log.id)}
+                                style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
+                              >
+                                {modalExpandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
+                              </button>
+                              {modalExpandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
+                            </>
+                          )}
                         </div>
-                      </div>
-                    )
-                  })}
+                      ))}
+                      <Pagination
+                        totalItems={(companyLogs[logModalCompany.id] || []).filter(log => !modalProductFilter || String(log.installation_id) === String(modalProductFilter)).length}
+                        itemsPerPage={MODAL_LOGS_PER_PAGE}
+                        currentPage={modalPage}
+                        onPageChange={(page) => {
+                          setModalPage(page);
+                          setModalExpandedDiffs(new Set());
+                        }}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
-            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-              <button className="btn btn-primary" onClick={() => setHistoryModal(false)}>Tutup</button>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setLogModalOpen(false)}>Tutup</button>
             </div>
           </div>
         </div>
@@ -2726,83 +2795,80 @@ function InstallationPage({ installations, companies, regions, can, currentUser,
   );
 }
 
-function ProspectingPage({ companies, installations, can, regions, currentUser, onAssignmentDone }) {
+function ProspectingPage({ installations, can, regions, currentUser, onAssignmentDone }) {
   const [regionFilter, setRegionFilter] = useState('');
   const [picFilter, setPicFilter] = useState('');
-  const [modalCompany, setModalCompany] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedInstIds, setSelectedInstIds] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [visitDate, setVisitDate] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
+  const [expandedCompanies, setExpandedCompanies] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
-    setSelectedInstIds([]);
+    setSelectedIds([]);
   }, [regionFilter, picFilter]);
 
   if (!can('prospecting_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>prospecting_read</code>.</p></div>;
 
-  const urgentInstallations = useMemo(() => (
-    installations.filter(inst => {
-      if (inst.status === 'Done' || Number(inst.is_history) === 1) return false;
-      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-      if (diffDays > 30) return false;
-      if (regionFilter && inst.region !== regionFilter) return false;
-      if (picFilter === '__unassigned__' && inst.assigned_to) return false;
-      if (picFilter && picFilter !== '__unassigned__' && String(inst.assigned_to || '') !== picFilter) return false;
-      return true;
-    })
-  ), [installations, regionFilter, picFilter]);
+  const activeInstallations = useMemo(() => installations.filter(i => {
+    if (Number(i.is_history) === 1) return false;
+    if (!showInactive && (i.status_active === '0' || Number(i.status_active) === 0)) return false;
+    if (regionFilter && i.region !== regionFilter) return false;
+    if (picFilter === '__unassigned__' && i.assigned_to) return false;
+    if (picFilter && picFilter !== '__unassigned__' && String(i.assigned_to || '') !== picFilter) return false;
+    return true;
+  }), [installations, showInactive, regionFilter, picFilter]);
 
   const picOptions = useMemo(() => {
     const seen = new globalThis.Map();
-    installations.forEach(inst => {
-      if (inst.status === 'Done' || Number(inst.is_history) === 1) return;
-      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-      if (diffDays > 30) return;
-      if (regionFilter && inst.region !== regionFilter) return;
-
+    activeInstallations.forEach(inst => {
       const key = inst.assigned_to ? String(inst.assigned_to) : '__unassigned__';
       const label = inst.assigned_to_name || 'Unassigned';
       if (!seen.has(key)) seen.set(key, { value: key, label });
     });
     return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [installations, regionFilter]);
+  }, [activeInstallations]);
 
-  const groupedClusteredData = useMemo(() => {
+  const groupedByCompany = useMemo(() => {
     const groups = {};
-    urgentInstallations.forEach(inst => {
-      const companyRecord = companies.find(c => Number(c.id) === Number(inst.company_id));
-      const diffDays = Math.ceil((new Date(inst.replacement_date) - new Date()) / (1000 * 60 * 60 * 24));
-      const company = {
-        id: inst.company_id,
-        name: companyRecord?.name || inst.company_name || `Company #${inst.company_id}`,
-        type: companyRecord?.type || inst.company_type || 'Customer',
-        address: companyRecord?.address || '-',
-        region: companyRecord?.region_name || inst.region || '-',
-        region_name: companyRecord?.region_name || inst.region || '-'
-      };
-
-      if (!groups[company.id]) groups[company.id] = { company, items: [], minDiffDays: diffDays };
-      groups[company.id].items.push({ ...inst, diffDays });
-      if (diffDays < groups[company.id].minDiffDays) groups[company.id].minDiffDays = diffDays;
+    activeInstallations.forEach(inst => {
+      if (searchTerm && !inst.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) && !inst.product_name?.toLowerCase().includes(searchTerm.toLowerCase())) return;
+      const cid = inst.company_id;
+      if (!groups[cid]) {
+        groups[cid] = {
+          company: { id: cid, name: inst.company_name, type: inst.company_type, region: inst.region },
+          items: [], activeCount: 0, inactiveCount: 0
+        };
+      }
+      groups[cid].items.push(inst);
+      if (inst.status_active === '0' || Number(inst.status_active) === 0) groups[cid].inactiveCount++;
+      else groups[cid].activeCount++;
     });
-    return Object.values(groups).sort((a, b) => a.minDiffDays - b.minDiffDays);
-  }, [urgentInstallations, companies]);
+    return Object.values(groups).sort((a, b) => a.company.name.localeCompare(b.company.name));
+  }, [activeInstallations, searchTerm]);
 
-  const currentData = groupedClusteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const ITEMS_PER_PAGE = 10;
+  const currentGroups = groupedByCompany.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const toggleSelect = (instId) => {
-    setSelectedInstIds(prev => prev.includes(instId) ? prev.filter(id => id !== instId) : [...prev, instId]);
+  const toggleExpand = (companyId) => {
+    setExpandedCompanies(prev => ({ ...prev, [companyId]: !prev[companyId] }));
   };
 
-  const toggleSelectAllForCompany = (items, isSelected) => {
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleSelectCompany = (items) => {
     const ids = items.map(i => i.id);
-    if (isSelected) {
-      setSelectedInstIds(prev => prev.filter(id => !ids.includes(id)));
+    const allSelected = ids.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
     } else {
-      setSelectedInstIds(prev => [...new Set([...prev, ...ids])]);
+      setSelectedIds(prev => [...new Set([...prev, ...ids])]);
     }
   };
 
@@ -2815,7 +2881,7 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          installation_ids: selectedInstIds,
+          installation_ids: selectedIds,
           visit_date: visitDate,
           user_id: currentUser.id
         })
@@ -2823,7 +2889,7 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
       const d = await res.json();
       if (d.status === 'success') {
         alert(d.message);
-        setSelectedInstIds([]);
+        setSelectedIds([]);
         setVisitDate('');
         setAssignModalOpen(false);
         if (onAssignmentDone) onAssignmentDone();
@@ -2835,119 +2901,147 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h1 className="page-title" style={{ margin: 0 }}>Smart Prospecting & Routing</h1>
-          <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)' }}>Otoritas Penjadwalan Rute Kunjungan berdasarkan data urgent per klien</p>
-        </div>
-        {selectedInstIds.length > 0 && can('prospecting_assign') && (
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.2)' }} onClick={() => setAssignModalOpen(true)}>
-            <Send size={18} /> Atur Jadwal Kunjungan ({selectedInstIds.length})
-          </button>
-        )}
-      </div>
-
-      <div className="card-view" style={{ padding: '24px', marginBottom: '24px', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', borderColor: '#bae6fd' }}>
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: 1, maxWidth: '400px', margin: 0 }}>
-            <label style={{ color: '#0369a1', fontWeight: '700', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filter Area / Region Kunjungan:</label>
-            <select className="form-control" style={{ border: '2px solid #38bdf8', borderRadius: '10px' }} value={regionFilter} onChange={e => setRegionFilter(e.target.value)}>
-              <option value="">-- Semua Wilayah --</option>
-              {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ flex: 1, maxWidth: '320px', margin: 0 }}>
-            <label style={{ color: '#0369a1', fontWeight: '700', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filter PIC Sales:</label>
-            <select className="form-control" style={{ border: '2px solid #38bdf8', borderRadius: '10px' }} value={picFilter} onChange={e => setPicFilter(e.target.value)}>
-              <option value="">-- Semua PIC --</option>
-              {picOptions.map(opt => <option key={opt.value || opt.label} value={opt.value}>{opt.label}</option>)}
-            </select>
-          </div>
-          <div style={{ flex: 2, display: 'flex', gap: '12px' }}>
-            <div style={{ background: 'white', padding: '10px 16px', borderRadius: '10px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Info size={16} color="#0284c7" />
-              <span style={{ fontSize: '0.85rem', color: '#0369a1' }}>Ditemukan <strong>{groupedClusteredData.length} Klien</strong> dengan urgensi kunjungan.</span>
-            </div>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Smart Prospecting & Routing</h1>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
+            Tampilkan Nonaktif
+          </label>
+          <select className="form-control" style={{ padding: '8px 12px', fontSize: '0.875rem', minWidth: '180px' }} value={regionFilter} onChange={e => setRegionFilter(e.target.value)}>
+            <option value="">Semua Wilayah...</option>
+            {regions.map(r => <option key={r.id} value={r.region_name}>{r.region_name}</option>)}
+          </select>
+          <select className="form-control" style={{ padding: '8px 12px', fontSize: '0.875rem', minWidth: '180px' }} value={picFilter} onChange={e => setPicFilter(e.target.value)}>
+            <option value="">Semua PIC...</option>
+            {picOptions.map(opt => <option key={opt.value || opt.label} value={opt.value}>{opt.label}</option>)}
+          </select>
         </div>
       </div>
 
-      <div className="card-view" style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
-          {currentData.length === 0 ? (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '64px', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', color: 'var(--text-muted)' }}>
-              <div style={{ marginBottom: '16px' }}><CheckCircle2 size={48} color="#10b981" style={{ opacity: 0.5 }} /></div>
-              <h3 style={{ margin: 0 }}>Rute Aman!</h3>
-              <p>Tidak ada urgensi penawaran/penggantian kunjungan dalam wilayah ini.</p>
-            </div>
-          ) : currentData.map((group, index) => {
-            const allSelected = group.items.every(i => selectedInstIds.includes(i.id));
-            const someSelected = group.items.some(i => selectedInstIds.includes(i.id));
-            const uniquePics = [...new Set(group.items.map(i => i.assigned_to_name || 'Unassigned'))];
-            const picSummary = uniquePics.length > 1 ? `${uniquePics[0]} +${uniquePics.length - 1} lainnya` : uniquePics[0];
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <div className="stat-card">
+          <div className="stat-icon"><Database size={24} /></div>
+          <div className="stat-content"><h3>Total Klien</h3><p>{groupedByCompany.length}</p></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon"><Wrench size={24} /></div>
+          <div className="stat-content"><h3>Total Produk Aktif</h3><p>{activeInstallations.length}</p></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#dcfce7', color: '#16a34a' }}><CheckCircle2 size={24} /></div>
+          <div className="stat-content"><h3>Selesai (Done)</h3><p>{activeInstallations.filter(i => i.status === 'Done').length}</p></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#fee2e2', color: '#ef4444' }}><AlertCircle size={24} /></div>
+          <div className="stat-content"><h3>Akan Habis (30d)</h3><p>{activeInstallations.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length}</p></div>
+        </div>
+      </div>
 
-            return (
-              <div key={group.company.id} style={{
-                background: 'white',
-                borderRadius: '24px',
-                border: someSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                transition: 'all 0.2s ease',
-                boxShadow: someSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : 'none'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>{group.company.name}</h3>
+      {selectedIds.length > 0 && can('prospecting_assign') && (
+        <div style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', padding: '14px 20px', borderRadius: '14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #93c5fd' }}>
+          <span style={{ fontWeight: 700, color: '#1e40af' }}>{selectedIds.length} item terpilih</span>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '0.85rem', borderRadius: '10px' }} onClick={() => setAssignModalOpen(true)}>
+              <Send size={16} /> Atur Jadwal Kunjungan
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: '10px' }} onClick={() => setSelectedIds([])}>Batal Pilih</button>
+          </div>
+        </div>
+      )}
+
+      <div className="card-view" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input className="form-control" style={{ padding: '12px 14px 12px 40px', width: '100%' }} placeholder="Cari klien atau produk..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
+          </div>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', alignSelf: 'center' }}>Menampilkan {groupedByCompany.length} klien</span>
+        </div>
+
+        {currentGroups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
+            <Database size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p style={{ margin: 0 }}>Tidak ada data ditemukan.</p>
+          </div>
+        ) : currentGroups.map(group => {
+          const isExpanded = expandedCompanies[group.company.id];
+          const companySelected = group.items.every(i => selectedIds.includes(i.id));
+          const nearExpiry = group.items.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length;
+          return (
+            <div key={group.company.id} style={{ borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '16px', overflow: 'hidden', background: 'white' }}>
+              <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: isExpanded ? '#f8fafc' : 'white' }} onClick={() => toggleExpand(group.company.id)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <div style={{ color: '#0f172a' }}>{isExpanded ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <h3 style={{ margin: 0, fontSize: '1rem', color: '#0f172a' }}>{group.company.name}</h3>
                       <span className={`badge ${group.company.type === 'Customer' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>{group.company.type}</span>
+                      {nearExpiry > 0 && <span className="badge badge-danger" style={{ fontSize: '10px' }}>{nearExpiry} Akan Habis</span>}
+                      {group.inactiveCount > 0 && <span className="badge badge-secondary" style={{ fontSize: '10px' }}>{group.inactiveCount} Non-Aktif</span>}
                     </div>
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}><MapPin size={14} style={{ marginRight: '4px' }} />{group.company.region_name}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}><MapPin size={14} style={{ marginRight: '4px' }} />{group.company.region} | {group.items.length} Produk</p>
                   </div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   {can('prospecting_assign') && (
-                    <input type="checkbox" style={{ width: '24px', height: '24px', cursor: 'pointer' }} checked={allSelected} onChange={() => toggleSelectAllForCompany(group.items, allSelected)} />
+                    <input type="checkbox" checked={companySelected} onClick={e => e.stopPropagation()} onChange={() => toggleSelectCompany(group.items)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
                   )}
                 </div>
-
-                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Daftar Produk Urgen ({group.items.length}):</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {group.items.map(item => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.85rem' }}>
-                        {can('prospecting_assign') && (
-                          <input type="checkbox" style={{ marginTop: '3px' }} checked={selectedInstIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
-                        )}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500 }}>{item.product_name}</div>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                            Visit: <strong style={{ color: item.visit_schedule_date ? '#0369a1' : '#94a3b8' }}>{item.visit_schedule_date || '-'}</strong>
-                          </div>
-                        </div>
-                        <span style={{ color: item.diffDays <= 7 ? '#ef4444' : '#f59e0b', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {item.diffDays < 0 ? `Lapsed ${Math.abs(item.diffDays)}d` : `H - ${item.diffDays}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                    PIC Saat Ini: <strong style={{ color: '#0369a1' }}>{picSummary}</strong>
-                  </div>
-                  <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setModalCompany(group)}>
-                    Lihat Detail
-                  </button>
-                </div>
               </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: '24px' }}>
-          <Pagination totalItems={groupedClusteredData.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
-        </div>
+              {isExpanded && (
+                <div style={{ borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table" style={{ margin: 0 }}>
+                      <thead style={{ background: '#f8fafc' }}>
+                        <tr>
+                          {can('prospecting_assign') && <th style={{ width: '40px' }}></th>}
+                          <th>Produk</th>
+                          <th>Tgl Instalasi</th>
+                          <th>Siklus</th>
+                          <th>Target Ganti</th>
+                          <th>Tgl Follow Up</th>
+                          <th>Visit Schedule</th>
+                          <th>Status</th>
+                          <th>Status Data</th>
+                          <th>PIC Sales</th>
+                          <th>Audit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map(row => {
+                          const diff = Math.ceil((new Date(row.replacement_date) - new Date()) / 86400000);
+                          const isInactive = row.status_active === '0' || Number(row.status_active) === 0;
+                          return (
+                            <tr key={row.id} style={{ opacity: isInactive ? 0.5 : 1 }}>
+                              {can('prospecting_assign') && <td><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>}
+                              <td><strong style={{ color: '#0369a1' }}>{row.product_name}</strong></td>
+                              <td>{row.installation_date || '-'}</td>
+                              <td>Tiap {row.maintenance_cycle_value} {row.maintenance_cycle_unit}</td>
+                              <td>
+                                <div style={{ color: diff < 0 ? '#ef4444' : diff <= 30 ? '#f59e0b' : 'inherit' }}>
+                                  <div style={{ fontWeight: 600 }}>{row.replacement_date}</div>
+                                  <div style={{ fontSize: '0.75rem' }}>{diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff}`}</div>
+                                </div>
+                              </td>
+                              <td>{row.followup_date || '-'}</td>
+                              <td>{row.visit_schedule_date || '-'}</td>
+                              <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
+                              <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
+                              <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
+                              <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <Pagination totalItems={groupedByCompany.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
 
       {assignModalOpen && (
@@ -2959,8 +3053,7 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
             </div>
             <form onSubmit={handleBulkAssign}>
               <div className="modal-body">
-                <p style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>Anda akan menjadwalkan <strong>{selectedInstIds.length} item tugas</strong>. </p>
-
+                <p style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>Anda akan menjadwalkan <strong>{selectedIds.length} item tugas</strong>.</p>
                 <div className="form-group">
                   <label>Tentukan Tanggal Kunjungan</label>
                   <input required type="date" className="form-control" value={visitDate} onChange={e => setVisitDate(e.target.value)} />
@@ -2975,21 +3068,6 @@ function ProspectingPage({ companies, installations, can, regions, currentUser, 
             </form>
           </div>
         </div>
-      )}
-
-      {modalCompany && (
-        <CompanyProductsModal
-          company={modalCompany.company}
-          title="Detail Target Follow-up / Penggantian"
-          items={modalCompany.items}
-          onClose={() => setModalCompany(null)}
-          renderAction={(item) => (
-            <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5 }}>
-              <div>PIC: <strong style={{ color: '#0369a1' }}>{item.assigned_to_name || 'Unassigned'}</strong></div>
-              <div>Visit: <strong style={{ color: item.visit_schedule_date ? '#0369a1' : '#94a3b8' }}>{item.visit_schedule_date || '-'}</strong></div>
-            </div>
-          )}
-        />
       )}
     </div>
   );
@@ -3367,11 +3445,14 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
   const [search, setSearch] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedCompanies, setExpandedCompanies] = useState(new Set());
   const [companyLogs, setCompanyLogs] = useState({});
   const [loadingLogs, setLoadingLogs] = useState(new Set());
-  const [expandedDiffs, setExpandedDiffs] = useState(new Set());
   const [isExportingHistory, setIsExportingHistory] = useState(false);
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logModalCompany, setLogModalCompany] = useState(null);
+  const [modalExpandedDiffs, setModalExpandedDiffs] = useState(new Set());
+  const [modalPage, setModalPage] = useState(1);
+  const MODAL_LOGS_PER_PAGE = 10;
   const [historyData, setHistoryData] = useState({ installations: null, companies: null });
   const fetchedRef = useRef(new Set());
 
@@ -3644,43 +3725,50 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
     }
   };
 
+  const modalLogs = useMemo(() => {
+    const all = companyLogs[logModalCompany?.id] || [];
+    return all.slice(
+      (modalPage - 1) * MODAL_LOGS_PER_PAGE,
+      modalPage * MODAL_LOGS_PER_PAGE
+    );
+  }, [companyLogs, logModalCompany, modalPage]);
+
   if (!can('history_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>history_read</code>.</p></div>;
 
-  const toggleExpand = async (companyId) => {
-    const next = new Set(expandedCompanies);
-    if (next.has(companyId)) {
-      next.delete(companyId);
-      setExpandedCompanies(next);
-      return;
-    }
-    next.add(companyId);
-    setExpandedCompanies(next);
+  const openLogModal = (company) => {
+    setLogModalCompany(company);
+    setLogModalOpen(true);
+    setModalPage(1);
+    setModalExpandedDiffs(new Set());
 
-    if (companyLogs[companyId]) return;
+    if (companyLogs[company.id]) return;
 
-    setLoadingLogs(prev => new Set(prev).add(companyId));
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${companyId}`);
-      const json = await res.json();
-      if (json.status === 'success') {
-        fetchedRef.current.add(String(companyId));
-        setCompanyLogs(prev => ({ ...prev, [companyId]: json.data }));
-      }
-    } catch (err) {
-      console.error('Failed to fetch logs:', err);
-    }
-    setLoadingLogs(prev => {
-      const n = new Set(prev);
-      n.delete(companyId);
-      return n;
-    });
+    setLoadingLogs(prev => new Set(prev).add(company.id));
+    fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.status === 'success') {
+          fetchedRef.current.add(String(company.id));
+          setCompanyLogs(prev => ({ ...prev, [company.id]: json.data }));
+        }
+      })
+      .catch(err => console.error('Failed to fetch logs:', err))
+      .finally(() => {
+        setLoadingLogs(prev => {
+          const n = new Set(prev);
+          n.delete(company.id);
+          return n;
+        });
+      });
   };
 
-  const toggleDiff = (logId) => {
-    const next = new Set(expandedDiffs);
-    if (next.has(logId)) next.delete(logId);
-    else next.add(logId);
-    setExpandedDiffs(next);
+  const toggleModalDiff = (logId) => {
+    setModalExpandedDiffs(prev => {
+      const next = new Set(prev);
+      if (next.has(logId)) next.delete(logId);
+      else next.add(logId);
+      return next;
+    });
   };
 
   const renderDiff = (oldRaw, newRaw) => {
@@ -3734,66 +3822,102 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
             <tr>
               <th>Perusahaan</th>
               <th>Region</th>
-              <th>Catatan Detail Histori Produk</th>
+              <th>Jumlah Produk</th>
+              <th style={{ textAlign: 'right' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {currentData.map(group => (
-              <tr key={group.company.id}>
-                <td style={{ fontWeight: 600, verticalAlign: 'top' }}>{group.company.name}</td>
-                <td style={{ verticalAlign: 'top' }}>{group.company.region_name}</td>
-                <td style={{ verticalAlign: 'top' }}>
-                  <div
-                    onClick={() => toggleExpand(group.company.id)}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#0f172a' }}
+              <tr key={group.company.id} style={{ cursor: 'pointer' }} onClick={() => openLogModal(group.company)}>
+                <td style={{ fontWeight: 600, verticalAlign: 'middle' }}>{group.company.name}</td>
+                <td style={{ verticalAlign: 'middle' }}>{group.company.region_name}</td>
+                <td style={{ verticalAlign: 'middle' }}>{group.items.length} Produk</td>
+                <td style={{ verticalAlign: 'middle', textAlign: 'right' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={e => { e.stopPropagation(); openLogModal(group.company); }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem' }}
                   >
-                    {expandedCompanies.has(group.company.id) ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-                    <Archive size={16} style={{ color: '#64748b' }} />
-                    {loadingLogs.has(group.company.id) ? 'Memuat log...' : `${companyLogs[group.company.id]?.length || '0'} Log Aktivitas`}
-                  </div>
+                    <Archive size={16} />
+                    Lihat Log
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {currentData.length === 0 && <tr><td colSpan="4" style={{ textAlign: 'center', color: 'gray' }}>Belum ada data history perpanjangan.</td></tr>}
+          </tbody>
+        </table>
+        <Pagination totalItems={historicalGroups.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
+      </div>
 
-                  {expandedCompanies.has(group.company.id) && !loadingLogs.has(group.company.id) && (
-                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {(companyLogs[group.company.id] || []).map((log) => (
-                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '6px', padding: '10px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+      {logModalOpen && logModalCompany && (
+        <div className="modal-overlay" onClick={() => setLogModalOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Log Aktivitas — {logModalCompany.name}</h2>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Region: {logModalCompany.region_name || '-'}</p>
+              </div>
+              <button className="close-btn" onClick={() => setLogModalOpen(false)}><X size={24} /></button>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
+              {loadingLogs.has(logModalCompany.id) ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <Loader2 className="animate-spin" size={20} /> Memuat log aktivitas...
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {(companyLogs[logModalCompany.id] || []).length === 0 ? (
+                    <em style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
+                  ) : (
+                    <>
+                      {modalLogs.map((log) => (
+                        <div key={log.id} style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                             <span className={`badge ${getLogBadgeClass(log.action_type)}`}>{log.action_type}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(log.created_at).toLocaleString('id-ID')}</span>
                           </div>
-                          <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                          <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                             <strong>Oleh:</strong> {log.user_name || 'System'}
                           </div>
                           {log.description && (
-                            <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '10px' }}>
                               {log.description}
                             </div>
                           )}
                           {(log.old_values || log.new_values) && (
                             <>
                               <button
-                                onClick={() => toggleDiff(log.id)}
-                                style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
+                                onClick={() => toggleModalDiff(log.id)}
+                                style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', padding: 0 }}
                               >
-                                {expandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
+                                {modalExpandedDiffs.has(log.id) ? '▲ Sembunyikan Detail Perubahan' : '▼ Lihat Detail Perubahan'}
                               </button>
-                              {expandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
+                              {modalExpandedDiffs.has(log.id) && renderDiff(log.old_values, log.new_values)}
                             </>
                           )}
                         </div>
                       ))}
-                      {(companyLogs[group.company.id] || []).length === 0 && (
-                        <em style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Tidak ada log aktivitas untuk perusahaan ini.</em>
-                      )}
-                    </div>
+                      <Pagination
+                        totalItems={(companyLogs[logModalCompany.id] || []).length}
+                        itemsPerPage={MODAL_LOGS_PER_PAGE}
+                        currentPage={modalPage}
+                        onPageChange={(page) => {
+                          setModalPage(page);
+                          setModalExpandedDiffs(new Set());
+                        }}
+                      />
+                    </>
                   )}
-                </td>
-              </tr>
-            ))}
-            {currentData.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', color: 'gray' }}>Belum ada data history perpanjangan.</td></tr>}
-          </tbody>
-        </table>
-        <Pagination totalItems={historicalGroups.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
-      </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setLogModalOpen(false)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4367,7 +4491,7 @@ export default function App() {
                 <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} companies={companies} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage companies={companies} installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <div className="page-container">Akses Ditolak</div>} />
+                <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
                 <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
