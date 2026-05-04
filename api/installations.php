@@ -171,6 +171,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $company_id = $data['companyId'] ?? null;
     $products = $data['products'] ?? [];
     $user_id = $data['user_id'] ?? null;
+    $override_assigned_to = $data['assigned_to'] ?? null;
     
     if (!$company_id || empty($products)) {
         echo json_encode(['status' => 'error', 'message' => 'Company dan Produk wajib diisi.']);
@@ -193,7 +194,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prod['recurringUnit'] ?? 'months',
                 $prod['status'] ?? 'Scheduled',
                 $user_id,
-                $user_id  // assigned_to = user yang membuat
+                $override_assigned_to ?? $user_id
             ]);
             $newId = $pdo->lastInsertId();
             $newSnapshot = getInstallationAuditSnapshot($pdo, $newId);
@@ -630,49 +631,93 @@ if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
         
-        $stmt = $pdo->prepare("UPDATE installations SET product_name = ?, installation_date = ?, replacement_date = ?, followup_date = ?, maintenance_cycle_value = ?, maintenance_cycle_unit = ?, status = ?, notes = ?, updated_by = ? WHERE id = ?");
+        $updateStmt = $pdo->prepare("UPDATE installations SET product_name = ?, installation_date = ?, replacement_date = ?, followup_date = ?, maintenance_cycle_value = ?, maintenance_cycle_unit = ?, status = ?, notes = ?, updated_by = ? WHERE id = ?");
+        
+        $insertStmt = $pdo->prepare("INSERT INTO installations 
+            (company_id, product_name, installation_date, replacement_date, followup_date, maintenance_cycle_value, maintenance_cycle_unit, status, notes, assigned_to, created_by, updated_by) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
         $updated = 0;
+        $created = 0;
+        
         foreach ($items as $item) {
-            $old = getInstallationAuditSnapshot($pdo, $item['id']);
-
-            $stmt->execute([
-                $item['product_name'],
-                $item['installation_date'] ?: null,
-                $item['replacement_date'],
-                $item['followup_date'] ?: null,
-                $item['maintenance_cycle_value'] ?? null,
-                $item['maintenance_cycle_unit'] ?? 'months',
-                $item['status'] ?? 'Scheduled',
-                $item['notes'] ?? null,
-                $user_id,
-                $item['id']
-            ]);
-            $updated++;
-
-            $new = getInstallationAuditSnapshot($pdo, $item['id']);
-
-            if ($old && $new) {
-                [$statusOld, $statusNew] = buildStatusChangeAuditValues($old, $new);
-                if (!empty($statusNew)) {
-                    logActivity($pdo, $item['id'], $new['company_id'], 'STATUS_CHANGE',
-                        'Status diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
-                        $user_id,
-                        $statusOld,
-                        $statusNew
+            if (empty($item['id'])) {
+                // INSERT new item
+                $company_id = $item['company_id'] ?? null;
+                if (!$company_id) {
+                    throw new PDOException('company_id wajib diisi untuk produk baru.');
+                }
+                
+                $insertStmt->execute([
+                    $company_id,
+                    $item['product_name'] ?? '',
+                    $item['installation_date'] ?: null,
+                    $item['replacement_date'] ?? null,
+                    $item['followup_date'] ?: null,
+                    $item['maintenance_cycle_value'] ?? null,
+                    $item['maintenance_cycle_unit'] ?? 'months',
+                    $item['status'] ?? 'Scheduled',
+                    $item['notes'] ?? null,
+                    $item['assigned_to'] ?? null,
+                    $user_id,
+                    $user_id
+                ]);
+                $created++;
+                
+                $newId = $pdo->lastInsertId();
+                $newSnapshot = getInstallationAuditSnapshot($pdo, $newId);
+                if ($newSnapshot) {
+                    logActivity($pdo, $newId, $company_id, 'CREATE',
+                        'Produk baru ditambahkan (dari bulk edit): ' . ($item['product_name'] ?? ''),
+                        $user_id, null,
+                        filterInstallationAuditValues(
+                            normalizeInstallationAuditValues($newSnapshot),
+                            ['company_name', 'product_name', 'installation_date', 'replacement_date', 'maintenance_cycle', 'status', 'assigned_to_name']
+                        )
                     );
                 }
+            } else {
+                // UPDATE existing item
+                $old = getInstallationAuditSnapshot($pdo, $item['id']);
 
-                [$editOld, $editNew] = diffInstallationAuditValues($old, $new);
-                unset($editOld['status'], $editNew['status']);
+                $updateStmt->execute([
+                    $item['product_name'],
+                    $item['installation_date'] ?: null,
+                    $item['replacement_date'],
+                    $item['followup_date'] ?: null,
+                    $item['maintenance_cycle_value'] ?? null,
+                    $item['maintenance_cycle_unit'] ?? 'months',
+                    $item['status'] ?? 'Scheduled',
+                    $item['notes'] ?? null,
+                    $user_id,
+                    $item['id']
+                ]);
+                $updated++;
 
-                if (!empty($editNew)) {
-                    logActivity($pdo, $item['id'], $new['company_id'], 'EDIT',
-                        'Data diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
-                        $user_id,
-                        $editOld,
-                        $editNew
-                    );
+                $new = getInstallationAuditSnapshot($pdo, $item['id']);
+
+                if ($old && $new) {
+                    [$statusOld, $statusNew] = buildStatusChangeAuditValues($old, $new);
+                    if (!empty($statusNew)) {
+                        logActivity($pdo, $item['id'], $new['company_id'], 'STATUS_CHANGE',
+                            'Status diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
+                            $user_id,
+                            $statusOld,
+                            $statusNew
+                        );
+                    }
+
+                    [$editOld, $editNew] = diffInstallationAuditValues($old, $new);
+                    unset($editOld['status'], $editNew['status']);
+
+                    if (!empty($editNew)) {
+                        logActivity($pdo, $item['id'], $new['company_id'], 'EDIT',
+                            'Data diperbarui (Bulk): ' . ($new['product_name'] ?? $old['product_name'] ?? ''),
+                            $user_id,
+                            $editOld,
+                            $editNew
+                        );
+                    }
                 }
             }
         }
@@ -680,8 +725,9 @@ if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->commit();
         echo json_encode([
             'status' => 'success', 
-            'message' => "{$updated} produk berhasil diperbarui.",
-            'updated' => $updated
+            'message' => "{$updated} produk diperbarui, {$created} produk ditambahkan.",
+            'updated' => $updated,
+            'created' => $created
         ]);
     } catch (PDOException $e) {
         $pdo->rollBack();

@@ -1987,6 +1987,32 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     setEditItems(newItems);
   };
 
+  const addEditItem = () => {
+    const assignedTo = editItems.length > 0 ? editItems[0].assigned_to : null;
+    const base = getLocalDateString();
+    const val = '1';
+    const unit = 'years';
+    const newItem = {
+      id: null,
+      company_id: editCompany?.id,
+      company_name: editCompany?.name,
+      product_name: '',
+      installation_date: base,
+      maintenance_cycle_value: val,
+      maintenance_cycle_unit: unit,
+      replacement_date: calculateNextDate(base, val, unit),
+      status: 'Scheduled',
+      followup_date: '',
+      notes: '',
+      assigned_to: assignedTo
+    };
+    setEditItems(prev => [...prev, newItem]);
+  };
+
+  const removeEditItem = (idx) => {
+    setEditItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const openRenew = (row) => {
     setRenewData({
       id: row.id,
@@ -2402,13 +2428,24 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {editItems.map((item, idx) => {
                   const diff = Math.ceil((new Date(item.replacement_date) - new Date()) / 86400000);
+                  const isNew = !item.id;
                   return (
-                    <div key={item.id} style={{ background: '#f8fafc', padding: '20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                    <div key={item.id ?? `new-${idx}`} style={{ background: isNew ? '#ffffff' : '#f8fafc', padding: '20px', borderRadius: '14px', border: isNew ? '2px dashed #0ea5e9' : '1px solid #e2e8f0', position: 'relative' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                        <span style={{ fontWeight: 700, color: '#0369a1', fontSize: '0.95rem' }}>#{idx + 1}</span>
-                        <span style={{ fontSize: '0.75rem', color: diff < 0 ? '#ef4444' : '#64748b', fontWeight: 600 }}>
-                          {diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff}`}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 700, color: '#0369a1', fontSize: '0.95rem' }}>#{idx + 1}</span>
+                          {isNew && <span style={{ background: '#0ea5e9', color: 'white', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>BARU</span>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '0.75rem', color: diff < 0 ? '#ef4444' : '#64748b', fontWeight: 600 }}>
+                            {diff < 0 ? `Overdue ${Math.abs(diff)}d` : `H - ${diff}`}
+                          </span>
+                          {isNew && (
+                            <button type="button" onClick={() => removeEditItem(idx)} style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Hapus row">
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                         <div className="form-group" style={{ margin: 0 }}>
@@ -2450,6 +2487,9 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                     </div>
                   );
                 })}
+                <button type="button" className="btn btn-secondary" style={{ width: '100%', border: '2px dashed #bae6fd', background: 'white', color: '#0284c7', fontWeight: 600 }} onClick={addEditItem}>
+                  <Plus size={18} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Tambah Produk Baru
+                </button>
               </div>
             </div>
             <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
@@ -2566,6 +2606,9 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
   // Transfer state
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState({ companyId: '', companyName: '', fromUserId: '', fromUserName: '' });
+  // Add product within edit modal
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [addProductRows, setAddProductRows] = useState([]);
 
   const reloadInstallations = async () => {
     try {
@@ -2601,6 +2644,8 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
           id: editData.id,
           status: editData.status,
           replacementDate: editData.replacement_date,
+          followup_date: editData.followup_date,
+          visit_schedule_date: editData.visit_schedule_date,
           notes: editData.notes,
           user_id: currentUser?.id
         })
@@ -2610,6 +2655,71 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
         setInstallations(prev => prev.map(i => i.id === editData.id ? { ...i, ...editData, last_editor_name: currentUser?.username } : i));
         setEditModal(false);
         setEditData(null);
+      } else {
+        alert(d.message);
+      }
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+  };
+
+  const getAddProductInitialRow = () => {
+    const d = getLocalDateString();
+    return { productName: '', installationDate: d, replacementDate: calculateNextDate(d, '1', 'years'), recurringValue: '1', recurringUnit: 'years', status: 'Scheduled' };
+  };
+
+  const toggleAddProductSection = () => {
+    setShowAddProduct(prev => {
+      const next = !prev;
+      if (next) setAddProductRows([getAddProductInitialRow()]);
+      else setAddProductRows([]);
+      return next;
+    });
+  };
+
+  const updateAddProductRow = (idx, field, val) => {
+    const newRows = [...addProductRows];
+    newRows[idx] = { ...newRows[idx], [field]: val };
+    if (field === 'recurringValue' || field === 'recurringUnit' || field === 'installationDate') {
+      const baseDate = newRows[idx].installationDate || getLocalDateString();
+      newRows[idx].replacementDate = calculateNextDate(baseDate, newRows[idx].recurringValue, newRows[idx].recurringUnit);
+    }
+    setAddProductRows(newRows);
+  };
+
+  const addAddProductRow = () => {
+    setAddProductRows(prev => [...prev, getAddProductInitialRow()]);
+  };
+
+  const removeAddProductRow = (idx) => {
+    setAddProductRows(prev => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+  };
+
+  const handleAddProductSave = async () => {
+    if (!editData?.company_id) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: editData.company_id,
+          products: addProductRows.map(p => ({
+            productName: p.productName,
+            installationDate: p.installationDate,
+            replacementDate: p.replacementDate,
+            recurringValue: p.recurringValue,
+            recurringUnit: p.recurringUnit,
+            status: p.status
+          })),
+          assigned_to: editData.assigned_to,
+          user_id: currentUser?.id
+        })
+      });
+      const d = await res.json();
+      if (d.status === 'success') {
+        alert('Produk baru berhasil ditambahkan!');
+        setAddProductRows([]);
+        setShowAddProduct(false);
+        await reloadInstallations();
       } else {
         alert(d.message);
       }
@@ -2775,7 +2885,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                  {can('installation_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => { setEditData({ ...row }); setEditModal(true); }}>Edit</button>}
+                                  {can('installation_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => { const today = new Date().toISOString().split('T')[0]; setEditData({ ...row, followup_date: row.followup_date || today }); setEditModal(true); }}>Edit</button>}
                                   {can('installation_transfer') && <button className="btn" style={{ padding: '4px 8px', fontSize: '11px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} onClick={() => { setTransferTarget({ companyId: row.company_id, companyName: row.company_name, fromUserId: row.assigned_to, fromUserName: row.assigned_to_name, installationId: row.id }); setTransferOpen(true); }}>🔄 Transfer</button>}
                                 </div>
                               </td>
@@ -2794,7 +2904,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       </div>
 
       {/* Single Item Edit Modal */}
-      {editModal && editData && !editCompany && (
+      {editModal && editData && (
         <div className="modal-overlay" onClick={() => { setEditModal(false); setEditData(null); }}>
           <div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -2823,13 +2933,88 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
                     <input type="date" className="form-control" value={editData.replacement_date} onChange={e => setEditData({ ...editData, replacement_date: e.target.value })} />
                   </div>
                 </div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Tanggal Kunjungan</label>
+                    <input type="date" className="form-control" value={editData.visit_schedule_date || ''} onChange={e => setEditData({ ...editData, visit_schedule_date: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Tanggal Follow Up</label>
+                    <input type="date" className="form-control" value={editData.followup_date || ''} onChange={e => setEditData({ ...editData, followup_date: e.target.value })} />
+                  </div>
+                </div>
                 <div className="form-group">
                   <label>Catatan / Notes</label>
                   <textarea className="form-control" style={{ height: '80px' }} value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} placeholder="Tambahkan catatan..." />
                 </div>
+
+                {can('installation_update') && (
+                  <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                    <button type="button" className="btn btn-secondary" style={{ width: '100%', border: '2px dashed #bae6fd', background: 'white', color: '#0284c7', fontWeight: 600 }} onClick={toggleAddProductSection}>
+                      <Plus size={18} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {showAddProduct ? 'Tutup Tambah Produk' : 'Tambah Produk Baru untuk Klien Ini'}
+                    </button>
+
+                    {showAddProduct && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+                        {addProductRows.map((row, idx) => (
+                          <div key={idx} style={{ background: '#ffffff', padding: '16px', borderRadius: '14px', border: '2px dashed #0ea5e9', position: 'relative' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <span style={{ fontWeight: 700, color: '#0369a1', fontSize: '0.9rem' }}>#{idx + 1}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ background: '#0ea5e9', color: 'white', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>BARU</span>
+                                {addProductRows.length > 1 && (
+                                  <button type="button" onClick={() => removeAddProductRow(idx)} style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Hapus row">
+                                    <X size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                              <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Nama Produk</label>
+                                <input required className="form-control" value={row.productName} onChange={e => updateAddProductRow(idx, 'productName', e.target.value)} placeholder="Nama produk..." />
+                              </div>
+                              <div className="form-group" style={{ margin: 0 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Tgl Pasang</label>
+                                <input type="date" className="form-control" value={row.installationDate} onChange={e => updateAddProductRow(idx, 'installationDate', e.target.value)} />
+                              </div>
+                              <div className="form-group" style={{ margin: 0 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0ea5e9' }}>Target Ganti</label>
+                                <input type="date" className="form-control" style={{ borderColor: '#0ea5e9' }} value={row.replacementDate} onChange={e => updateAddProductRow(idx, 'replacementDate', e.target.value)} />
+                              </div>
+                              <div className="form-group" style={{ margin: 0 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Siklus</label>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <input type="number" className="form-control" style={{ width: '60px', padding: '6px' }} value={row.recurringValue} onChange={e => updateAddProductRow(idx, 'recurringValue', e.target.value)} />
+                                  <select className="form-control" style={{ flex: 1, padding: '6px' }} value={row.recurringUnit} onChange={e => updateAddProductRow(idx, 'recurringUnit', e.target.value)}>
+                                    <option value="days">Hari</option>
+                                    <option value="months">Bulan</option>
+                                    <option value="years">Tahun</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="form-group" style={{ margin: 0 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Status</label>
+                                <select className="form-control" value={row.status} onChange={e => updateAddProductRow(idx, 'status', e.target.value)}>
+                                  {STATUS_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" className="btn btn-secondary" style={{ width: '100%', border: '2px dashed #bae6fd', background: 'white', color: '#0284c7', fontWeight: 600 }} onClick={addAddProductRow}>
+                          <Plus size={18} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Tambah Row Lagi
+                        </button>
+                        <button type="button" className="btn btn-primary" disabled={isSaving || addProductRows.some(r => !r.productName.trim())} onClick={handleAddProductSave}>
+                          {isSaving ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />} {isSaving ? 'Menyimpan...' : 'Simpan Produk Baru'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => { setEditModal(false); setEditData(null); }}>Batal</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setEditModal(false); setEditData(null); setShowAddProduct(false); setAddProductRows([]); }}>Batal</button>
                 <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
               </div>
             </form>

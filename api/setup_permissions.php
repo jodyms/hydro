@@ -28,6 +28,7 @@ try {
         ['sales_update', 'Dapat mengedit data instalasi'],
         ['sales_delete', 'Dapat menghapus data instalasi'],
         ['sales_showall', 'Dapat melihat seluruh data instalasi'],
+        ['installation_create', 'Dapat menambah produk instalasi baru dari halaman instalasi'],
         // Prospecting
         ['prospecting_read', 'Dapat mengakses menu Smart Prospecting'],
         // Work Order
