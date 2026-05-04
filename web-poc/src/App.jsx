@@ -1988,7 +1988,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   };
 
   const addEditItem = () => {
-    const assignedTo = editItems.length > 0 ? editItems[0].assigned_to : null;
+    const assignedTo = currentUser?.id ?? null;
     const base = getLocalDateString();
     const val = '1';
     const unit = 'years';
@@ -2710,7 +2710,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
             recurringUnit: p.recurringUnit,
             status: p.status
           })),
-          assigned_to: editData.assigned_to,
+          assigned_to: currentUser?.id,
           user_id: currentUser?.id
         })
       });
