@@ -2,8 +2,8 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Host: 127.0.0.1
--- Generation Time: Apr 26, 2026 at 06:14 PM
+-- Host: localhost
+-- Generation Time: May 04, 2026 at 04:53 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -204,6 +204,7 @@ CREATE TABLE `installations` (
   `maintenance_cycle_value` int(11) DEFAULT NULL,
   `maintenance_cycle_unit` enum('Days','Months','Years') DEFAULT NULL,
   `replacement_date` date DEFAULT NULL,
+  `followup_date` date DEFAULT NULL,
   `visit_schedule_date` date DEFAULT NULL,
   `status` varchar(100) DEFAULT NULL,
   `notes` text DEFAULT NULL,
@@ -213,33 +214,40 @@ CREATE TABLE `installations` (
   `created_by` int(11) DEFAULT NULL,
   `updated_by` int(11) DEFAULT NULL,
   `status_active` tinyint(1) DEFAULT 1,
-  `assigned_to` int(11) DEFAULT NULL
+  `assigned_to` int(11) DEFAULT NULL,
+  `renew_count` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `installations`
 --
 
-INSERT INTO `installations` (`id`, `company_id`, `product_name`, `installation_date`, `maintenance_cycle_value`, `maintenance_cycle_unit`, `replacement_date`, `visit_schedule_date`, `status`, `notes`, `is_history`, `created_at`, `updated_at`, `created_by`, `updated_by`, `status_active`, `assigned_to`) VALUES
-(1, 2, 'test', '2026-04-01', 3, 'Days', '2026-04-04', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-11 13:28:23', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(2, 2, 'test', '2026-04-01', 30, 'Days', '2026-05-01', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-11 13:28:23', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(3, 2, 'test', '2026-04-02', 1, 'Days', '2026-04-03', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-13 15:31:51', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(4, 1, 'testt4est', '2026-04-18', 15, 'Days', '2026-05-03', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 13:49:59', '2026-04-26 10:31:54', 1, 1, 1, 1),
-(5, 2, 'test', '2026-04-18', 1, 'Days', '2026-07-01', NULL, 'Scheduled', NULL, 0, '2026-04-18 14:04:31', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(6, 2, 'test', '2026-04-18', 3, 'Days', '2026-04-07', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 14:09:49', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(7, 2, 'test', '2026-04-18', 30, 'Days', '2026-05-31', NULL, 'Scheduled', NULL, 0, '2026-04-18 14:10:28', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(8, 2, 'test', '2026-04-18', 3, 'Days', '2026-05-18', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 14:14:44', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(9, 2, 'test', '2026-04-18', 3, 'Days', '2026-05-18', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: pergantian filter karena sudah waktu nya di ganti', 1, '2026-04-18 14:16:39', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(10, 1, 'testt4est', '2026-04-18', 15, 'Days', '2026-06-01', NULL, 'Scheduled', NULL, 0, '2026-04-18 14:17:03', '2026-04-26 10:31:54', 1, 1, 1, 1),
-(11, 2, 'test', '2026-04-18', 3, 'Days', '2026-05-18', NULL, 'Scheduled', NULL, 0, '2026-04-18 14:17:38', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(12, 1, 'jkljkl', '2026-04-03', 1, 'Years', '2027-04-03', NULL, 'Scheduled', NULL, 0, '2026-04-18 15:52:09', '2026-04-26 10:31:54', 2, 1, 1, 1),
-(13, 2, 'Filter ', '2026-04-01', 1, 'Years', '2027-04-01', NULL, 'Scheduled', NULL, 0, '2026-04-18 15:54:28', '2026-04-26 10:31:40', 2, 1, 1, 2),
-(14, 2, 'testtest', '2026-04-01', 1, 'Years', '2027-04-01', NULL, 'Scheduled', NULL, 0, '2026-04-19 04:05:51', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(15, 2, 'filter', '2026-04-08', 1, 'Years', '2027-04-08', NULL, 'Scheduled', NULL, 0, '2026-04-19 04:05:51', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(16, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-26', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-26 05:55:22', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(17, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-29', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-26 05:55:50', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(18, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-29', NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: perpanjang', 1, '2026-04-26 06:26:21', '2026-04-26 10:31:40', 1, 1, 1, 2),
-(19, 2, 'test', '2026-04-30', 3, 'Days', '2026-05-03', NULL, 'Offering Product', 'Perpanjangan: perpanjang', 0, '2026-04-26 07:19:45', '2026-04-26 10:31:40', 1, 1, 1, 2);
+INSERT INTO `installations` (`id`, `company_id`, `product_name`, `installation_date`, `maintenance_cycle_value`, `maintenance_cycle_unit`, `replacement_date`, `followup_date`, `visit_schedule_date`, `status`, `notes`, `is_history`, `created_at`, `updated_at`, `created_by`, `updated_by`, `status_active`, `assigned_to`, `renew_count`) VALUES
+(1, 2, 'test', '2026-04-01', 3, 'Days', '2026-04-04', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-11 13:28:23', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(2, 2, 'test', '2026-04-01', 30, 'Days', '2026-05-01', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-11 13:28:23', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(3, 2, 'test', '2026-04-02', 1, 'Days', '2026-04-03', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-13 15:31:51', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(4, 1, 'testt4est', '2026-04-18', 15, 'Days', '2026-05-03', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 13:49:59', '2026-04-26 10:31:54', 1, 1, 1, 1, 0),
+(5, 2, 'test', '2026-04-18', 1, 'Days', '2026-04-19', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 14:04:31', '2026-05-04 02:28:30', 1, 1, 1, 2, 0),
+(6, 2, 'test', '2026-04-18', 3, 'Days', '2026-04-07', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 14:09:49', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(7, 2, 'test', '2026-04-18', 30, 'Days', '2026-05-18', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 14:10:28', '2026-05-04 02:28:30', 1, 1, 1, 2, 0),
+(8, 2, 'test', '2026-04-18', 3, 'Days', '2026-05-18', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-18 14:14:44', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(9, 2, 'test', '2026-04-18', 3, 'Days', '2026-05-18', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: pergantian filter karena sudah waktu nya di ganti', 1, '2026-04-18 14:16:39', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(10, 1, 'testt4est', '2026-04-18', 15, 'Days', '2026-06-01', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 14:17:03', '2026-04-26 10:31:54', 1, 1, 1, 1, 0),
+(11, 2, 'test', '2026-04-18', 3, 'Days', '2026-04-21', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 14:17:38', '2026-05-04 02:28:30', 1, 1, 1, 2, 0),
+(12, 1, 'jkljkl', '2026-04-03', 1, 'Years', '2027-04-03', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 15:52:09', '2026-04-26 10:31:54', 2, 1, 1, 1, 0),
+(13, 2, 'Filter ', '2026-04-01', 1, 'Years', '2027-04-01', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-18 15:54:28', '2026-04-26 10:31:40', 2, 1, 1, 2, 0),
+(14, 2, 'testtest', '2026-04-01', 1, 'Years', '2027-04-01', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-19 04:05:51', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(15, 2, 'filter', '2026-04-08', 1, 'Years', '2027-04-08', NULL, NULL, 'Scheduled', NULL, 0, '2026-04-19 04:05:51', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(16, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-26', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-26 05:55:22', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(17, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-29', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-26 05:55:50', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(18, 2, 'test', '2026-04-26', 3, 'Days', '2026-04-29', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: perpanjang', 1, '2026-04-26 06:26:21', '2026-04-26 10:31:40', 1, 1, 1, 2, 0),
+(19, 2, 'baru test 2', '2026-05-01', 8, 'Days', '2026-05-09', '2026-05-02', '2026-04-28', 'Done', 'Lengkap & Diperpanjang ke siklus baru', 1, '2026-04-26 07:19:45', '2026-05-03 06:33:04', 1, 1, 1, 2, 0),
+(20, 2, 'baru test 2', '2026-05-03', 8, 'Days', '2026-05-13', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: new', 1, '2026-05-03 06:33:04', '2026-05-03 14:27:58', 1, 1, 1, 2, 0),
+(21, 2, 'baru test 2', '2026-05-03', 9, 'Days', '2026-05-12', NULL, NULL, 'Done', 'Lengkap & Diperpanjang ke siklus baru | Catatan: test', 1, '2026-05-03 14:27:58', '2026-05-03 14:35:07', 1, 1, 1, 2, 0),
+(22, 2, 'baru test 2', '2026-05-03', 9, 'Days', '2026-05-12', '2026-05-07', '2026-05-04', 'Follow up', 'follow', 0, '2026-05-03 14:35:07', '2026-05-04 02:12:17', 1, 1, 1, 2, 1),
+(23, 2, 'Mantap', '2026-05-04', 1, 'Years', '2027-05-04', '2026-05-04', NULL, 'Offering Product', '', 0, '2026-05-04 02:28:30', '2026-05-04 02:52:09', 1, 1, 1, 2, 0),
+(24, 2, 'keke test', '2026-05-04', 1, 'Years', '2027-05-04', NULL, NULL, 'Scheduled', NULL, 0, '2026-05-04 02:52:04', '2026-05-04 02:52:04', 1, NULL, 1, 2, 0),
+(25, 2, 'keke2test', '2026-05-04', 1, 'Years', '2027-05-04', NULL, NULL, 'Scheduled', NULL, 0, '2026-05-04 02:52:04', '2026-05-04 02:52:04', 1, NULL, 1, 2, 0);
 
 -- --------------------------------------------------------
 
@@ -265,7 +273,33 @@ CREATE TABLE `installation_activity_logs` (
 
 INSERT INTO `installation_activity_logs` (`id`, `installation_id`, `company_id`, `action_type`, `description`, `old_values`, `new_values`, `user_id`, `created_at`) VALUES
 (1, 18, 2, 'RENEW', 'Produk diperpanjang: test → test', '{\"product_name\":\"test\",\"replacement_date\":\"2026-04-29\",\"status\":\"Offering Product\"}', '{\"product_name\":\"test\",\"replacement_date\":\"2026-05-03\",\"new_id\":\"19\",\"notes\":\"perpanjang\"}', 1, '2026-04-26 07:19:45'),
-(2, 19, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"product_name\":\"test\",\"status\":\"Scheduled\",\"replacement_date\":\"2026-05-03\"}', '{\"id\":19,\"company_id\":2,\"product_name\":\"test\",\"installation_date\":\"2026-04-30\",\"maintenance_cycle_value\":3,\"maintenance_cycle_unit\":\"Days\",\"replacement_date\":\"2026-05-03\",\"visit_schedule_date\":null,\"status\":\"Offering Product\",\"notes\":\"Perpanjangan: perpanjang\",\"is_history\":0,\"created_at\":\"2026-04-26 14:19:45\",\"updated_at\":\"2026-04-26 14:28:09\",\"created_by\":1,\"updated_by\":1,\"status_active\":1,\"assigned_to\":2,\"company_name\":\"PT Jaya Abadi\",\"company_type\":\"Prospek\",\"region\":\"Bandung\",\"creator_name\":\"Admin\",\"last_editor_name\":\"Admin\",\"assigned_to_name\":\"Sales\"}', 2, '2026-04-26 07:30:30');
+(2, 19, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"product_name\":\"test\",\"status\":\"Scheduled\",\"replacement_date\":\"2026-05-03\"}', '{\"id\":19,\"company_id\":2,\"product_name\":\"test\",\"installation_date\":\"2026-04-30\",\"maintenance_cycle_value\":3,\"maintenance_cycle_unit\":\"Days\",\"replacement_date\":\"2026-05-03\",\"visit_schedule_date\":null,\"status\":\"Offering Product\",\"notes\":\"Perpanjangan: perpanjang\",\"is_history\":0,\"created_at\":\"2026-04-26 14:19:45\",\"updated_at\":\"2026-04-26 14:28:09\",\"created_by\":1,\"updated_by\":1,\"status_active\":1,\"assigned_to\":2,\"company_name\":\"PT Jaya Abadi\",\"company_type\":\"Prospek\",\"region\":\"Bandung\",\"creator_name\":\"Admin\",\"last_editor_name\":\"Admin\",\"assigned_to_name\":\"Sales\"}', 2, '2026-04-26 07:30:30'),
+(3, 19, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"product_name\":\"test\",\"status\":\"Offering Product\",\"replacement_date\":\"2026-05-03\",\"followup_date\":null,\"visit_schedule_date\":null}', '{\"id\":19,\"company_id\":2,\"product_name\":\"test\",\"installation_date\":\"2026-04-30\",\"maintenance_cycle_value\":3,\"maintenance_cycle_unit\":\"Days\",\"replacement_date\":\"2026-05-03\",\"followup_date\":\"2026-04-30\",\"visit_schedule_date\":null,\"status\":\"Follow up\",\"notes\":\"Followup\",\"is_history\":0,\"created_at\":\"2026-04-26 14:19:45\",\"updated_at\":\"2026-04-26 17:31:40\",\"created_by\":1,\"updated_by\":1,\"status_active\":1,\"assigned_to\":2,\"company_name\":\"PT Jaya Abadi\",\"company_type\":\"Prospek\",\"region\":\"Bandung\",\"creator_name\":\"Admin\",\"last_editor_name\":\"Admin\",\"assigned_to_name\":\"Sales\"}', 1, '2026-04-28 00:20:31'),
+(4, 19, 2, 'SCHEDULE_VISIT', 'Jadwal kunjungan diperbarui: test', '{\"visit_schedule_date\":null}', '{\"visit_schedule_date\":\"2026-04-28\"}', 1, '2026-04-28 00:42:57'),
+(5, 19, 2, 'STATUS_CHANGE', 'Status diperbarui (Bulk): test', '{\"status\":\"Follow up\"}', '{\"status\":\"Offering Product\"}', 1, '2026-04-28 01:06:56'),
+(6, 19, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"followup_date\":\"2026-04-30\"}', '{\"followup_date\":\"2026-05-01\"}', 1, '2026-04-28 01:06:56'),
+(7, 19, 2, 'EDIT', 'Data diperbarui (Bulk): baru test', '{\"product_name\":\"test\"}', '{\"product_name\":\"baru test\"}', 1, '2026-04-28 01:07:34'),
+(8, 19, 2, 'STATUS_CHANGE', 'Status diperbarui (Bulk): baru test 2', '{\"status\":\"Offering Product\"}', '{\"status\":\"Reminder Sent\"}', 1, '2026-04-28 01:08:16'),
+(9, 19, 2, 'EDIT', 'Data diperbarui (Bulk): baru test 2', '{\"product_name\":\"baru test\",\"installation_date\":\"2026-04-30\",\"replacement_date\":\"2026-05-03\",\"followup_date\":\"2026-05-01\",\"maintenance_cycle\":\"3 Hari\"}', '{\"product_name\":\"baru test 2\",\"installation_date\":\"2026-05-01\",\"replacement_date\":\"2026-05-05\",\"followup_date\":\"2026-05-02\",\"maintenance_cycle\":\"4 Hari\"}', 1, '2026-04-28 01:08:16'),
+(10, 19, 2, 'STATUS_CHANGE', 'Status diperbarui (Bulk): baru test 2', '{\"status\":\"Reminder Sent\",\"notes\":\"Followup\"}', '{\"status\":\"Offering Product\",\"notes\":\"Followup pr\"}', 1, '2026-04-28 01:10:35'),
+(11, 19, 2, 'EDIT', 'Data diperbarui (Bulk): baru test 2', '{\"replacement_date\":\"2026-05-05\",\"notes\":\"Followup\",\"maintenance_cycle\":\"4 Hari\"}', '{\"replacement_date\":\"2026-05-09\",\"notes\":\"Followup pr\",\"maintenance_cycle\":\"8 Hari\"}', 1, '2026-04-28 01:10:35'),
+(12, 19, 2, 'STATUS_CHANGE', 'Status diperbarui: baru test 2', '{\"status\":\"Offering Product\",\"notes\":\"Followup pr\"}', '{\"status\":\"Reminder Sent\",\"notes\":\"Followup pr\"}', 1, '2026-05-03 06:17:04'),
+(13, 19, 2, 'STATUS_CHANGE', 'Status diperbarui: baru test 2', '{\"status\":\"Reminder Sent\",\"notes\":\"Followup pr\"}', '{\"status\":\"Done\",\"notes\":\"Lengkap & Diperpanjang ke siklus baru\"}', 1, '2026-05-03 06:33:04'),
+(14, 19, 2, 'RENEW', 'Produk diperpanjang: baru test 2 → baru test 2', '{\"product_name\":\"baru test 2\",\"replacement_date\":\"2026-05-09\",\"status\":\"Reminder Sent\",\"maintenance_cycle\":\"8 Hari\"}', '{\"product_name\":\"baru test 2\",\"installation_date\":\"2026-05-03\",\"replacement_date\":\"2026-05-13\",\"status\":\"Scheduled\",\"notes\":\"-\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"8 Hari\"}', 1, '2026-05-03 06:33:04'),
+(15, 20, 2, 'STATUS_CHANGE', 'Status diperbarui: baru test 2', '{\"status\":\"Scheduled\",\"notes\":\"-\"}', '{\"status\":\"Done\",\"notes\":\"Lengkap & Diperpanjang ke siklus baru | Catatan: new\"}', 1, '2026-05-03 14:27:58'),
+(16, 20, 2, 'RENEW', 'Produk diperpanjang: baru test 2 → baru test 2', '{\"product_name\":\"baru test 2\",\"replacement_date\":\"2026-05-13\",\"status\":\"Scheduled\",\"maintenance_cycle\":\"8 Hari\"}', '{\"product_name\":\"baru test 2\",\"installation_date\":\"2026-05-03\",\"replacement_date\":\"2026-05-12\",\"status\":\"Scheduled\",\"notes\":\"Perpanjangan: new\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"9 Hari\"}', 1, '2026-05-03 14:27:58'),
+(17, 21, 2, 'STATUS_CHANGE', 'Status diperbarui: baru test 2', '{\"status\":\"Scheduled\",\"notes\":\"Perpanjangan: new\"}', '{\"status\":\"Done\",\"notes\":\"Lengkap & Diperpanjang ke siklus baru | Catatan: test\"}', 1, '2026-05-03 14:35:07'),
+(18, 21, 2, 'RENEW', 'Produk diperpanjang: baru test 2 → baru test 2', '{\"product_name\":\"baru test 2\",\"replacement_date\":\"2026-05-12\",\"status\":\"Scheduled\",\"maintenance_cycle\":\"9 Hari\"}', '{\"product_name\":\"baru test 2\",\"installation_date\":\"2026-05-03\",\"replacement_date\":\"2026-05-12\",\"status\":\"Scheduled\",\"notes\":\"Perpanjangan: test\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"9 Hari\"}', 1, '2026-05-03 14:35:07'),
+(19, 22, 2, 'STATUS_CHANGE', 'Status diperbarui: baru test 2', '{\"status\":\"Scheduled\",\"notes\":\"Perpanjangan: test\"}', '{\"status\":\"Follow up\",\"notes\":\"follow\"}', 1, '2026-05-04 02:12:07'),
+(20, 22, 2, 'EDIT', 'Data diperbarui: baru test 2', '{\"visit_schedule_date\":\"-\",\"followup_date\":\"-\",\"notes\":\"Perpanjangan: test\"}', '{\"visit_schedule_date\":\"2026-05-04\",\"followup_date\":\"2026-05-04\",\"notes\":\"follow\"}', 1, '2026-05-04 02:12:07'),
+(21, 22, 2, 'EDIT', 'Data diperbarui: baru test 2', '{\"followup_date\":\"2026-05-04\"}', '{\"followup_date\":\"2026-05-07\"}', 1, '2026-05-04 02:12:17'),
+(22, 11, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"replacement_date\":\"2026-05-18\"}', '{\"replacement_date\":\"2026-04-21\"}', 1, '2026-05-04 02:28:30'),
+(23, 7, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"replacement_date\":\"2026-05-31\"}', '{\"replacement_date\":\"2026-05-18\"}', 1, '2026-05-04 02:28:30'),
+(24, 5, 2, 'EDIT', 'Data diperbarui (Bulk): test', '{\"replacement_date\":\"2026-07-01\"}', '{\"replacement_date\":\"2026-04-19\"}', 1, '2026-05-04 02:28:30'),
+(25, 23, 2, 'CREATE', 'Produk baru ditambahkan (dari bulk edit): Mantap', NULL, '{\"company_name\":\"PT Jaya Abadi\",\"product_name\":\"Mantap\",\"installation_date\":\"2026-05-04\",\"replacement_date\":\"2027-05-04\",\"status\":\"Offering Product\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"1 Tahun\"}', 1, '2026-05-04 02:28:30'),
+(26, 24, 2, 'CREATE', 'Produk baru ditambahkan: keke test', NULL, '{\"company_name\":\"PT Jaya Abadi\",\"product_name\":\"keke test\",\"installation_date\":\"2026-05-04\",\"replacement_date\":\"2027-05-04\",\"status\":\"Scheduled\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"1 Tahun\"}', 1, '2026-05-04 02:52:04'),
+(27, 25, 2, 'CREATE', 'Produk baru ditambahkan: keke2test', NULL, '{\"company_name\":\"PT Jaya Abadi\",\"product_name\":\"keke2test\",\"installation_date\":\"2026-05-04\",\"replacement_date\":\"2027-05-04\",\"status\":\"Scheduled\",\"assigned_to_name\":\"Sales\",\"maintenance_cycle\":\"1 Tahun\"}', 1, '2026-05-04 02:52:04'),
+(28, 23, 2, 'EDIT', 'Data diperbarui: Mantap', '{\"followup_date\":\"-\"}', '{\"followup_date\":\"2026-05-04\"}', 1, '2026-05-04 02:52:09');
 
 -- --------------------------------------------------------
 
@@ -658,11 +692,14 @@ INSERT INTO `user_sessions` (`id`, `user_id`, `ip_address`, `user_agent`, `last_
 ('0e4630e4cfd22aafc504c4c95f0aa1761bbe81c21ff2d4d05321062ccebde5f1', 2, NULL, NULL, '2026-04-26 10:32:01', '2026-04-26 14:32:01', '2026-04-26 10:32:01'),
 ('112331c30dee1536ab26a04d9b2b9107e72ca3ee7bc43539d79b779e597ec085', 1, NULL, NULL, '2026-04-05 11:18:47', '2026-04-05 15:18:47', '2026-04-05 11:18:47'),
 ('154ce575f6471e94714e80fd762c33893dc44ac5bd3ded38fc585322f771aaa0', 1, NULL, NULL, '2026-04-18 15:43:42', '2026-04-18 19:43:42', '2026-04-18 15:43:42'),
+('26ff12305af10f6439051442522c91855262ad4b816f26aac3d9e389fbfe12eb', 1, NULL, NULL, '2026-05-03 15:14:08', '2026-05-03 19:14:08', '2026-05-03 15:14:08'),
 ('2b42213b05b93904182a0b929bf8bc6ce849eb337b7247ec09cb4f5887af95cd', 1, NULL, NULL, '2026-04-18 16:38:05', '2026-04-18 20:38:05', '2026-04-18 16:38:05'),
 ('2d32d40486156b43c94b2e2ca4bafc5ee8934a8c18d747170a3de858c8c2d1a7', 2, NULL, NULL, '2026-04-05 06:03:57', '2026-04-05 10:03:57', '2026-04-05 06:03:57'),
 ('2ed3e967465c1c8c412b47001a8a2e674efae66943421448efb226ea1035946f', 2, NULL, NULL, '2026-04-05 06:32:40', '2026-04-05 10:32:40', '2026-04-05 06:32:40'),
+('4f42aced60b21a0cbf4b8171798e21db9e1216cc7705b3d5782001b4a76c01cd', 1, NULL, NULL, '2026-05-04 02:46:31', '2026-05-04 06:46:31', '2026-05-04 02:46:31'),
 ('4f7a8f42c21e1891d488afab10fea137d9ad011ca221a377dd739a656a9f8179', 1, NULL, NULL, '2026-04-18 15:43:43', '2026-04-18 19:43:43', '2026-04-18 15:43:43'),
 ('5937710c0fcba1ffefd5e9912cc080d7ce1956bc04f3f109270eddfe4d326eeb', 1, NULL, NULL, '2026-04-26 10:31:29', '2026-04-26 14:31:29', '2026-04-26 10:31:29'),
+('6c8794beed2a5ac6fddd0f1af77479faa05d32fd9cb43077add0403a80b89743', 1, NULL, NULL, '2026-04-27 17:12:02', '2026-04-27 21:12:02', '2026-04-27 17:12:02'),
 ('7d66663164e66b58675a636da5621c3e0a9843961cd1d78bcc840889edc7cd34', 1, NULL, NULL, '2026-04-05 06:04:13', '2026-04-05 10:04:13', '2026-04-05 06:04:13'),
 ('7ec6cfa8e44a062ad426d1d47bb9c8df80d0cac12c9026d8210a504c71b47c1d', 1, NULL, NULL, '2026-04-05 05:53:45', '2026-04-05 09:53:45', '2026-04-05 05:53:45'),
 ('82856ebbf52717a3878eda56f8969790be2da6b2adc462a07513f52ad9dec000', 2, NULL, NULL, '2026-04-26 07:29:28', '2026-04-26 11:29:28', '2026-04-26 07:29:28'),
@@ -672,6 +709,7 @@ INSERT INTO `user_sessions` (`id`, `user_id`, `ip_address`, `user_agent`, `last_
 ('93a44b7ce7100d6eed88d95009ac0016df51757cfb7e22c1baca85337304a8f9', 1, NULL, NULL, '2026-04-05 14:04:09', '2026-04-05 18:04:09', '2026-04-05 14:04:09'),
 ('9d266eab9ff84134fd152512e887117a3e9c79c9a289dbe51254bedb74df5bb5', 1, NULL, NULL, '2026-04-05 04:57:42', '2026-04-05 08:57:42', '2026-04-05 04:57:42'),
 ('b0936cbfdf04a7178a5c84ec6ffce9db94c29b70e66a8e7ba3f72160d5f3f6c6', 1, NULL, NULL, '2026-04-26 10:33:04', '2026-04-26 14:33:04', '2026-04-26 10:33:04'),
+('b0b15496de4d6e47b3b722fa584a1ad69abaf68e72e9e383448c134c57feff29', 1, NULL, NULL, '2026-05-03 15:13:26', '2026-05-03 19:13:26', '2026-05-03 15:13:26'),
 ('ba01828dcd69a80c09e458f856090f28a3bc253e9967c434662c7f94475455fc', 1, NULL, NULL, '2026-04-18 16:06:09', '2026-04-18 20:06:09', '2026-04-18 16:06:09'),
 ('bbc22755d6be474c8d16a6c3bf6a5f247755bad1145a72a652e08704465b785f', 1, NULL, NULL, '2026-04-11 13:16:23', '2026-04-11 17:16:23', '2026-04-11 13:16:23'),
 ('bf5284331acea22f938ff29ff2caff40fa3f87615225792340221f9174228bc0', 2, NULL, NULL, '2026-04-18 15:50:56', '2026-04-18 19:50:56', '2026-04-18 15:50:56'),
@@ -899,13 +937,13 @@ ALTER TABLE `industries`
 -- AUTO_INCREMENT for table `installations`
 --
 ALTER TABLE `installations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `installation_activity_logs`
 --
 ALTER TABLE `installation_activity_logs`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT for table `installation_statuses`
