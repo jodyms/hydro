@@ -10,7 +10,8 @@ function Login({ setUser }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [loginError, setLoginError] = useState('');
+
   // Connection tester state
   const [dbStatus, setDbStatus] = useState('loading');
   const [dbMessage, setDbMessage] = useState('Checking database connection...');
@@ -31,7 +32,7 @@ function Login({ setUser }) {
           setDbStatus('error');
           setDbMessage(data.message);
         }
-      } catch (err) {
+      } catch {
         setDbStatus('error');
         setDbMessage('❌ Backend API terputus. Pastikan konfigurasi VITE_API_URL benar.');
       }
@@ -43,37 +44,36 @@ function Login({ setUser }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+    setLoginError('');
+
     try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-        
+
         const data = await response.json();
-        
+
         if(data.status === 'success') {
             setDbStatus('success');
             setDbMessage(data.message);
-            
+
             // Simpan Session Data
             localStorage.setItem('auth_token', data.token);
             localStorage.setItem('auth_user', JSON.stringify(data.user));
-            
+
             // Sync dengan App state
             if (setUser) setUser(data.user);
-            
+
             setTimeout(() => {
                 navigate('/');
             }, 1000);
         } else {
-            setDbStatus('error');
-            setDbMessage(data.message);
+            setLoginError(data.message);
         }
-    } catch(err) {
-        setDbStatus('error');
-        setDbMessage('Gagal menghubungi backend PHP.');
+    } catch {
+        setLoginError('Gagal menghubungi backend PHP.');
     } finally {
         setIsLoading(false);
     }
@@ -119,13 +119,21 @@ function Login({ setUser }) {
             />
           </div>
 
-          <button 
-            type="submit" 
-            className="login-btn" 
-            disabled={isLoading || dbStatus === 'error'}
+          <button
+            type="submit"
+            className="login-btn"
+            disabled={isLoading}
           >
             {isLoading ? <Loader2 className="animate-spin" /> : 'Log In Securely'}
           </button>
+
+          {loginError && (
+            <div className="conn-status error" style={{ marginTop: '12px' }}>
+              <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}>
+                <AlertCircle size={16} /> {loginError}
+              </span>
+            </div>
+          )}
         </form>
 
         <div className={`conn-status ${dbStatus}`}>
