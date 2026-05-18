@@ -36,7 +36,7 @@ if ($action === 'list') {
         $pics = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $pics]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data PIC.']);
     }
     exit;
 }
@@ -63,7 +63,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$company_id, $name, $job_title, $phone, $dob ?: null, $email, $address, $user_id]);
         echo json_encode(['status' => 'success', 'message' => 'PIC berhasil ditambahkan.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan PIC.']);
     }
     exit;
 }
@@ -89,7 +89,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$company_id, $name, $job_title, $phone, $dob ?: null, $email, $address, $data['user_id'] ?? null, $id]);
         echo json_encode(['status' => 'success', 'message' => 'PIC berhasil diperbarui.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui data PIC.']);
     }
     exit;
 }
@@ -102,7 +102,7 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE company_pics SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END WHERE id = ?");
         $stmt->execute([$id]);
         echo json_encode(['status' => 'success', 'message' => 'Status PIC berhasil diubah.']);
-    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah status PIC.']); }
     exit;
 }
 

@@ -10,7 +10,7 @@ if ($action === 'list') {
         $regions = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $regions]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data region.']);
     }
     exit;
 }
@@ -30,7 +30,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$name, $user_id]);
         echo json_encode(['status' => 'success', 'message' => 'Region berhasil ditambahkan.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan region.']);
     }
     exit;
 }
@@ -50,7 +50,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$name, $data['user_id'] ?? null, $id]);
         echo json_encode(['status' => 'success', 'message' => 'Region berhasil diperbarui.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui region.']);
     }
     exit;
 }
@@ -63,7 +63,7 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE regions SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END WHERE id = ?");
         $stmt->execute([$id]);
         echo json_encode(['status' => 'success', 'message' => 'Status region berhasil diubah.']);
-    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah status region.']); }
     exit;
 }
 

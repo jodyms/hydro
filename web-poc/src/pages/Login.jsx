@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import './Login.css';
 
-// Ensure the logo path is correct relative to public directory since it's in the root
 const LOGO_PATH = '/hui-logo.png'; 
 
 function Login({ setUser }) {
@@ -11,35 +10,8 @@ function Login({ setUser }) {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-
-  // Connection tester state
-  const [dbStatus, setDbStatus] = useState('loading');
-  const [dbMessage, setDbMessage] = useState('Checking database connection...');
   
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Memanggil API backend PHP untuk mengecek status database
-    const testConnection = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=test-db`);
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          setDbStatus('success');
-          setDbMessage(data.message);
-        } else {
-          setDbStatus('error');
-          setDbMessage(data.message);
-        }
-      } catch {
-        setDbStatus('error');
-        setDbMessage('❌ Backend API terputus. Pastikan konfigurasi VITE_API_URL benar.');
-      }
-    };
-    
-    testConnection();
-  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -56,14 +28,9 @@ function Login({ setUser }) {
         const data = await response.json();
 
         if(data.status === 'success') {
-            setDbStatus('success');
-            setDbMessage(data.message);
-
-            // Simpan Session Data
             localStorage.setItem('auth_token', data.token);
             localStorage.setItem('auth_user', JSON.stringify(data.user));
 
-            // Sync dengan App state
             if (setUser) setUser(data.user);
 
             setTimeout(() => {
@@ -73,7 +40,7 @@ function Login({ setUser }) {
             setLoginError(data.message);
         }
     } catch {
-        setLoginError('Gagal menghubungi backend PHP.');
+        setLoginError('Gagal menghubungi server. Silakan coba lagi.');
     } finally {
         setIsLoading(false);
     }
@@ -135,12 +102,6 @@ function Login({ setUser }) {
             </div>
           )}
         </form>
-
-        <div className={`conn-status ${dbStatus}`}>
-          {dbStatus === 'loading' && <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}><Loader2 className="animate-spin" size={16} /> {dbMessage}</span>}
-          {dbStatus === 'success' && <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}><CheckCircle2 size={16} /> {dbMessage}</span>}
-          {dbStatus === 'error' && <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}><AlertCircle size={16} /> {dbMessage}</span>}
-        </div>
 
       </div>
     </div>

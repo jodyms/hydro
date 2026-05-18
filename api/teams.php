@@ -32,7 +32,7 @@ if ($method === 'GET') {
             $teams = $stmt->fetchAll();
             echo json_encode(['status' => 'success', 'data' => $teams]);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data tim.']);
         }
         exit;
     }
@@ -40,7 +40,7 @@ if ($method === 'GET') {
     if ($action === 'members') {
         $team_id = $_GET['team_id'] ?? null;
         if (!$team_id) {
-            echo json_encode(['status' => 'error', 'message' => 'Team ID required']);
+            echo json_encode(['status' => 'error', 'message' => 'ID tim wajib diisi.']);
             exit;
         }
         try {
@@ -49,7 +49,7 @@ if ($method === 'GET') {
             $member_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
             echo json_encode(['status' => 'success', 'data' => $member_ids]);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil anggota tim.']);
         }
         exit;
     }
@@ -87,7 +87,7 @@ if ($method === 'POST') {
             echo json_encode(['status' => 'success', 'message' => 'Tim berhasil dibuat']);
         } catch (PDOException $e) {
             $pdo->rollBack();
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal membuat tim.']);
         }
         exit;
     }
@@ -123,7 +123,7 @@ if ($method === 'POST') {
             echo json_encode(['status' => 'success', 'message' => 'Data tim berhasil diperbarui']);
         } catch (PDOException $e) {
             $pdo->rollBack();
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui tim.']);
         }
         exit;
     }
@@ -131,18 +131,18 @@ if ($method === 'POST') {
     if ($action === 'deactivate') {
         $id = $data['id'] ?? null;
         if (!$id) {
-            echo json_encode(['status' => 'error', 'message' => 'ID Tim required']);
+            echo json_encode(['status' => 'error', 'message' => 'ID tim wajib diisi.']);
             exit;
         }
         try {
             $pdo->prepare("UPDATE teams SET status = 'inactive' WHERE id = ?")->execute([$id]);
             echo json_encode(['status' => 'success', 'message' => 'Tim berhasil dinonaktifkan']);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menonaktifkan tim.']);
         }
         exit;
     }
 }
 
-echo json_encode(['status' => 'error', 'message' => 'Invalid Request']);
+echo json_encode(['status' => 'error', 'message' => 'Permintaan tidak valid.']);
 ?>

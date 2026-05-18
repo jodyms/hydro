@@ -39,7 +39,7 @@ if ($action === 'list') {
         $companies = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $companies]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data perusahaan.']);
     }
     exit;
 }
@@ -56,7 +56,7 @@ if ($action === 'list_metadata') {
             'statuses' => $statuses
         ]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data master perusahaan.']);
     }
     exit;
 }
@@ -100,7 +100,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmtRes->execute([$newId]);
         echo json_encode(['status' => 'success', 'message' => 'Company berhasil ditambahkan.', 'data' => $stmtRes->fetch()]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan company.']);
     }
     exit;
 }
@@ -143,7 +143,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         echo json_encode(['status' => 'success', 'message' => 'Data berhasil diperbarui.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui data company.']);
     }
     exit;
 }
@@ -156,7 +156,7 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE companies SET status_active = NOT status_active WHERE id = ?");
         $stmt->execute([$id]);
         echo json_encode(['status' => 'success', 'message' => 'Status berhasil diubah.']);
-    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah status company.']); }
     exit;
 }
 
@@ -168,7 +168,7 @@ if ($action === 'convert_to_customer' && $_SERVER['REQUEST_METHOD'] === 'POST') 
         $stmt = $pdo->prepare("UPDATE companies SET type_id = 1 WHERE id = ?"); // 1 = Customer
         $stmt->execute([$id]);
         echo json_encode(['status' => 'success', 'message' => 'Status diubah menjadi Customer.']);
-    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+    } catch (PDOException $e) { echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah tipe company.']); }
     exit;
 }
 

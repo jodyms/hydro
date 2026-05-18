@@ -28,7 +28,7 @@ if ($action === 'list') {
         $data = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $data]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil log aktivitas.']);
     }
     exit;
 }

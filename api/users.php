@@ -32,7 +32,7 @@ if ($method === 'GET') {
         echo json_encode(['status' => 'success', 'data' => $users]);
     } catch (PDOException $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data pengguna: ' . $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data pengguna.']);
     }
     exit;
 }
@@ -54,7 +54,7 @@ if ($method === 'POST' && isset($_GET['action']) && $_GET['action'] === 'update'
         $stmt->execute([$role_id, $status, $phone, $data['user_id'] ?? null, $id]);
         echo json_encode(['status' => 'success', 'message' => 'Data User berhasil diubah.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah User: ' . $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah data user.']);
     }
     exit;
 }
@@ -70,10 +70,10 @@ if ($method === 'POST' && isset($_GET['action']) && $_GET['action'] === 'deactiv
         $pdo->prepare("UPDATE users SET status = 'inactive' WHERE id = ?")->execute([$id]);
         echo json_encode(['status' => 'success', 'message' => 'User berhasil dinonaktifkan.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menonaktifkan user.']);
     }
     exit;
 }
 
-echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+echo json_encode(['status' => 'error', 'message' => 'Metode tidak diizinkan.']);
 ?>

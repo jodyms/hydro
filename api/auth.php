@@ -83,7 +83,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if($e->errorInfo[1] == 1062) {
              echo json_encode(['status' => 'error', 'message' => 'Nama pengguna (Username) atau Email sudah pernah diambil.']);
         } else {
-             echo json_encode(['status' => 'error', 'message' => 'Sistem gagal menyuntik data: ' . $e->getMessage()]);
+             echo json_encode(['status' => 'error', 'message' => 'Registrasi gagal diproses. Silakan coba lagi.']);
         }
     }
     exit;
@@ -117,15 +117,15 @@ if ($action === 'update_profile' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         echo json_encode(['status' => 'success', 'message' => 'Profil berhasil diperbarui.', 'user' => $updatedUser]);
     } catch(PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui profil: ' . $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui profil. Silakan coba lagi.']);
     }
     exit;
 }
 
 if ($action === 'test-db') {
-    echo json_encode(['status' => 'success', 'message' => 'Koneksi ke hydromar_sales (via PHP Native PDO) BERDASARKAN PARAMETER LOKAL BERHASIL!']);
+    echo json_encode(['status' => 'success', 'message' => 'Koneksi server berhasil. Sistem siap digunakan.']);
     exit;
 }
 
-echo json_encode(['status' => 'error', 'message' => 'Aksi REST API tidak direkognisi oleh Server PHP.']);
+echo json_encode(['status' => 'error', 'message' => 'Permintaan tidak valid.']);
 ?>

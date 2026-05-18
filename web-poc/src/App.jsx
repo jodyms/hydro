@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, PlusSquare, PlusCircle, Search, Map, X, Cake, Calendar, Filter, Eye, ChevronLeft, ChevronRight, Archive, User, Shield, ShieldCheck, Lock, AlertCircle, CheckCircle2, Loader2, LogOut, Settings, Download, Send, Info, Bell, BarChart3, Clock, MessageSquare } from 'lucide-react';
-// --- Constants (no more dataMock.js) ---
+// --- Constants ---
 let STATUS_OPTIONS = ['Reminder Sent', 'Offering Product', 'Scheduled for Replacement', 'Done', 'Skip', 'Follow up'];
 const COMPANY_TYPES = ['Customer', 'Prospek'];
 const DASHBOARD_SCHEDULE_FIELDS = [
@@ -220,7 +220,7 @@ function Header({ user, setUser }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const navigate = useNavigate();
-  const currentUser = user || { username: 'Guest', role_name: 'Unknown', email: '', phone: '' };
+  const currentUser = user || { username: '-', role_name: '-', email: '', phone: '' };
 
   const [formData, setFormData] = useState({ id: currentUser.id || '', email: currentUser.email || '', phone: currentUser.phone || '', password: '' });
   const [statusMsg, setStatusMsg] = useState(null);
@@ -252,7 +252,7 @@ function Header({ user, setUser }) {
       } else {
         setStatusMsg(json.message);
       }
-    } catch (err) {
+    } catch {
       setStatusMsg("Gagal menghubungi server.");
     } finally {
       setIsLoading(false);
@@ -675,7 +675,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser?.id || ''}&show_all=true`)
         .then(r => r.json())
         .then(j => { if (j.status === 'success') setAllUsers(j.data.filter(u => u.status === 'active')); })
-        .catch(console.error);
+        .catch(() => setStatusMsg('❌ Gagal memuat daftar user.'));
 
       if (installationId) {
         setAffectedCount(1);
@@ -694,7 +694,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
               setAffectedCount(count);
             }
           })
-          .catch(console.error);
+          .catch(() => setStatusMsg('❌ Gagal memuat jumlah data transfer.'));
       }
     }
   }, [isOpen, companyId, fromUserId, installationId, currentUser]);
@@ -726,9 +726,8 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       } else {
         setStatusMsg(`❌ ${d.message}`);
       }
-    } catch (e) {
+    } catch {
       setStatusMsg('❌ Gagal menghubungi server.');
-      console.error(e);
     } finally { setIsSaving(false); }
   };
 
@@ -1480,7 +1479,9 @@ function CompanyPage({ can, currentUser }) {
         setCompTypes(dataM.types);
       }
       if (dataR.status === 'success') setRegions(dataR.data);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch {
+      alert('Gagal memuat data company.');
+    } finally { setIsLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -1508,7 +1509,7 @@ function CompanyPage({ can, currentUser }) {
         setFormData({ id: '', name: '', address: '', industry_id: '', region_id: '', type_id: '2' });
         setNewIndustry('');
       } else alert(d.message);
-    } catch (err) { alert("Error connecting to API"); } finally { setIsSaving(false); }
+    } catch { alert("Gagal menghubungi server."); } finally { setIsSaving(false); }
   };
 
   const handleToggleStatus = async (id) => {
@@ -1522,7 +1523,7 @@ function CompanyPage({ can, currentUser }) {
         const d = await res.json();
         if (d.status === 'success') fetchData();
         else alert(d.message);
-      } catch (e) { console.error(e); }
+      } catch { alert('Gagal menghubungi server.'); }
     }
   };
 
@@ -1622,7 +1623,9 @@ function RegionPage({ can, currentUser }) {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`);
       const d = await res.json();
       if (d.status === 'success') setRegions(d.data || []);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch {
+      alert('Gagal memuat data region.');
+    } finally { setIsLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -1640,7 +1643,7 @@ function RegionPage({ can, currentUser }) {
       const d = await res.json();
       if (d.status === 'success') { setModalOpen(false); fetchData(); setFormData({ id: '', name: '' }); }
       else alert(d.message);
-    } catch (err) { alert("Error connecting to API"); } finally { setIsSaving(false); }
+    } catch { alert("Gagal menghubungi server."); } finally { setIsSaving(false); }
   };
 
   const handleToggleStatus = async (id) => {
@@ -1654,7 +1657,7 @@ function RegionPage({ can, currentUser }) {
         const d = await res.json();
         if (d.status === 'success') fetchData();
         else alert(d.message);
-      } catch (e) { console.error(e); }
+      } catch { alert('Gagal menghubungi server.'); }
     }
   };
 
@@ -1724,7 +1727,9 @@ function PICPage({ can, currentUser }) {
       const dC = await resC.json();
       if (dP.status === 'success') setPics(dP.data || []);
       if (dC.status === 'success') setCompanies(dC.data || []);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch {
+      alert('Gagal memuat data PIC.');
+    } finally { setIsLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -1742,7 +1747,7 @@ function PICPage({ can, currentUser }) {
       const d = await res.json();
       if (d.status === 'success') { setModalOpen(false); fetchData(); setFormData({ id: '', name: '', company_id: '', job_title: '', phone: '', email: '', dob: '', address: '' }); }
       else alert(d.message);
-    } catch (err) { alert("Error connecting to API"); } finally { setIsSaving(false); }
+    } catch { alert("Gagal menghubungi server."); } finally { setIsSaving(false); }
   };
 
   const handleToggleStatus = async (id) => {
@@ -1756,7 +1761,7 @@ function PICPage({ can, currentUser }) {
         const d = await res.json();
         if (d.status === 'success') fetchData();
         else alert(d.message);
-      } catch (e) { console.error(e); }
+      } catch { alert('Gagal menghubungi server.'); }
     }
   };
 
@@ -1887,7 +1892,9 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
       const resList = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
       const jsonList = await resList.json();
       if (jsonList.status === 'success') setInstallations(jsonList.data);
-    } catch (e) { console.error(e); }
+    } catch {
+      /* refresh data optional */
+    }
   };
 
   const handleSave = async (e) => {
@@ -1905,7 +1912,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setFormData({ companyId: '', products: [getInitialProduct()] });
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch { alert('Gagal menyimpan data work order.'); } finally { setIsSaving(false); }
   };
 
   const handleBulkEditSave = async () => {
@@ -1921,7 +1928,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setEditModal(false);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch { alert('Gagal memperbarui data produk.'); } finally { setIsSaving(false); }
   };
 
   const handleBulkToggle = async (activate) => {
@@ -1939,7 +1946,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setSelectedIds([]);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch (e) { console.error(e); }
+    } catch { alert('Gagal memperbarui status produk.'); }
   };
 
   const toggleExpand = (companyId) => {
@@ -2050,7 +2057,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         setRenewModal(false);
         await reloadInstallations();
       } else { alert(d.message); }
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch { alert('Gagal memproses perpanjangan produk.'); } finally { setIsSaving(false); }
   };
 
   const openHistoryModal = (company) => {
@@ -2616,7 +2623,9 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
       if (jsonL.status === 'success') setInstallations(jsonL.data);
-    } catch (e) { console.error(e); }
+    } catch {
+      /* refresh data optional */
+    }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -2630,7 +2639,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       if (d.status === 'success') {
         setInstallations(prev => prev.map(i => i.id === id ? { ...i, status: newStatus, last_editor_name: currentUser?.username } : i));
       }
-    } catch (e) { console.error(e); }
+    } catch { alert('Gagal memperbarui status produk.'); }
   };
 
   const handleEditSave = async (e) => {
@@ -2658,7 +2667,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       } else {
         alert(d.message);
       }
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch { alert('Gagal memperbarui data produk.'); } finally { setIsSaving(false); }
   };
 
   const getAddProductInitialRow = () => {
@@ -2723,7 +2732,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       } else {
         alert(d.message);
       }
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch { alert('Gagal menambah produk baru.'); } finally { setIsSaving(false); }
   };
 
   const toggleExpand = (companyId) => {
@@ -3139,7 +3148,7 @@ function ProspectingPage({ installations, can, regions, currentUser, onAssignmen
       } else {
         alert(d.message);
       }
-    } catch (e) { console.error(e); } finally { setIsAssigning(false); }
+    } catch { alert('Gagal menyimpan jadwal kunjungan.'); } finally { setIsAssigning(false); }
   };
 
   return (
@@ -3356,7 +3365,9 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
       if (jsonL.status === 'success') setInstallations(jsonL.data);
-    } catch (e) { console.error(e); }
+    } catch {
+      /* refresh data optional */
+    }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -3370,7 +3381,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       if (d.status === 'success') {
         setInstallations(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
       }
-    } catch (e) { console.error(e); }
+    } catch { alert('Gagal memperbarui status work order.'); }
   };
 
   const updateNotes = async (id, newNotes) => {
@@ -3384,7 +3395,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       if (d.status === 'success') {
         setInstallations(prev => prev.map(i => i.id === id ? { ...i, notes: newNotes } : i));
       }
-    } catch (e) { console.error(e); }
+    } catch { alert('Gagal memperbarui catatan work order.'); }
   };
 
 
@@ -3457,9 +3468,8 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
       } else {
         setRenewStatusMsg('❌ ' + d.message);
       }
-    } catch (e) {
+    } catch {
       setRenewStatusMsg('❌ Gagal menghubungi server.');
-      console.error(e);
     } finally { setRenewSaving(false); }
   };
 
@@ -3708,9 +3718,7 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
         installations: installationsJson.status === 'success' ? installationsJson.data : prev.installations,
         companies: companiesJson.status === 'success' ? companiesJson.data : prev.companies
       }));
-    }).catch(err => {
-      console.error('Failed to fetch history scoped data:', err);
-    });
+    }).catch(() => {});
 
     return () => { cancelled = true; };
   }, [currentUser?.id, canHistoryShowAll]);
@@ -3901,8 +3909,7 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
       });
 
       downloadCsvFile(`history-produk-${getLocalDateString()}.csv`, headers, rows);
-    } catch (err) {
-      console.error('Failed to export history CSV:', err);
+    } catch {
       alert('Gagal export CSV history.');
     } finally {
       setIsExportingHistory(false);
@@ -4004,7 +4011,7 @@ function UserPage({ can, currentUser }) {
       const jU = await resU.json(); const jR = await resR.json();
       if (jU.status === 'success') setUsersInfo(jU.data);
       if (jR.status === 'success') setRolesInfo(jR.data);
-    } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
+    } catch { alert('Gagal memuat data user dan role.'); } finally { setIsLoadingData(false); }
   };
 
   useEffect(() => {
@@ -4024,12 +4031,12 @@ function UserPage({ can, currentUser }) {
       const d = await res.json();
       if (d.status === 'success') { setStatusType('success'); setStatusMsg(d.message); fetchData(); setTimeout(() => setModalOpen(false), 1000); }
       else { setStatusType('error'); setStatusMsg(d.message); }
-    } catch (err) { setStatusType('error'); setStatusMsg('Kesalahan Jaringan API.'); } finally { setIsLoading(false); }
+    } catch { setStatusType('error'); setStatusMsg('Gagal menghubungi server.'); } finally { setIsLoading(false); }
   };
 
   const handleDeactivate = async (u) => {
     if (!window.confirm(`Nonaktifkan user "${u.username}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch (e) { console.error(e); }
+    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
   };
 
   const columns = [
@@ -4124,7 +4131,7 @@ function RolePage({ can, currentUser }) {
       const json = await res.json();
       if (json.status === 'success') setRoles(json.data);
     }
-    catch (e) { console.error(e); } finally { setIsLoading(false); }
+    catch { alert('Gagal memuat data role.'); } finally { setIsLoading(false); }
   };
 
   useEffect(() => {
@@ -4144,17 +4151,17 @@ function RolePage({ can, currentUser }) {
       setEditStatus(d.message);
       if (d.status === 'success') { fetchRoles(); setTimeout(() => { setEditModal(false); setEditStatus(null); }, 1000); }
     }
-    catch (err) { setEditStatus('Gagal menghubungi server.'); } finally { setEditSaving(false); }
+    catch { setEditStatus('Gagal menghubungi server.'); } finally { setEditSaving(false); }
   };
 
   const handleDeactivateRole = async (r) => {
     if (!window.confirm(`Nonaktifkan role "${r.role_name}"?`)) return;
-    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) }); const d = await res.json(); if (d.status === 'success') fetchRoles(); } catch (err) { console.error(err); }
+    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) }); const d = await res.json(); if (d.status === 'success') fetchRoles(); } catch { setEditStatus('Gagal menghubungi server.'); }
   };
 
   const openPermissions = async (role) => {
     setPermRoleId(role.id); setPermRoleName(role.role_name); setPermStatus(null);
-    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json = await res.json(); if (json.status === 'success') { setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number)); } } catch (err) { console.error(err); }
+    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json = await res.json(); if (json.status === 'success') { setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number)); } } catch { setPermStatus('Gagal memuat data otorisasi.'); }
     setPermModal(true);
   };
   const togglePerm = (pid) => setAssignedPerms(prev => prev.includes(pid) ? prev.filter(x => x !== pid) : [...prev, pid]);
@@ -4166,7 +4173,7 @@ function RolePage({ can, currentUser }) {
   const savePermissions = async () => {
     setPermSaving(true); setPermStatus(null);
     try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=save_permissions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role_id: permRoleId, permission_ids: assignedPerms }) }); const json = await res.json(); setPermStatus(json.message); if (json.status === 'success') setTimeout(() => { setPermModal(false); setPermStatus(null); }, 1200); }
-    catch (err) { setPermStatus('Gagal menghubungi server.'); } finally { setPermSaving(false); }
+    catch { setPermStatus('Gagal menghubungi server.'); } finally { setPermSaving(false); }
   };
 
   const selectAllPermissions = () => {
@@ -4312,7 +4319,7 @@ function TeamPage({ can, currentUser }) {
       const jt = await resT.json(); const ju = await resU.json();
       if (jt.status === 'success') setTeams(jt.data);
       if (ju.status === 'success') setAllUsers(ju.data);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch { alert('Gagal memuat data tim.'); } finally { setIsLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -4324,7 +4331,7 @@ function TeamPage({ can, currentUser }) {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=members&team_id=${t.id}`);
       const json = await res.json();
       setFormData({ id: t.id, team_name: t.team_name, description: t.description || '', status: t.status || 'active', members: json.data || [] });
-    } catch (e) { console.error(e); }
+    } catch { setStatusMsg('Gagal memuat anggota tim.'); }
     setModalOpen(true);
   };
 
@@ -4340,12 +4347,12 @@ function TeamPage({ can, currentUser }) {
       const d = await res.json();
       setStatusMsg(d.message);
       if (d.status === 'success') { fetchData(); setTimeout(() => setModalOpen(false), 1200); }
-    } catch (err) { setStatusMsg('Gagal terhubung API.'); } finally { setFormSaving(false); }
+    } catch { setStatusMsg('Gagal menghubungi server.'); } finally { setFormSaving(false); }
   };
 
   const handleDeactivate = async (t) => {
     if (!window.confirm(`Nonaktifkan tim "${t.team_name}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch (e) { console.error(e); }
+    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
   };
 
   const toggleMember = (uid) => {
@@ -4482,8 +4489,8 @@ export default function App() {
       if (jsonR.status === 'success') setRegions(jsonR.data);
       if (jsonI.status === 'success') setInstallations(jsonI.data);
       if (jsonP.status === 'success') setPICs(jsonP.data);
-    } catch (e) {
-      console.error("Gagal sync global data:", e);
+    } catch {
+      setSystemNotice('Sistem: sinkronisasi data gagal. Silakan refresh halaman.');
     }
   };
 

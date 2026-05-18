@@ -114,8 +114,7 @@ function CompanyHistoryModalInner({ onClose, company, historyItems }) {
       .then(json => {
         if (!cancelled) setCompanyLogs(json.status === 'success' ? json.data : []);
       })
-      .catch(err => {
-        console.error('Failed to fetch logs:', err);
+      .catch(() => {
         if (!cancelled) setCompanyLogs([]);
       })
       .finally(() => {

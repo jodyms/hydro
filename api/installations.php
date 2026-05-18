@@ -18,7 +18,6 @@ function logActivity($pdo, $installationId, $companyId, $actionType, $descriptio
         ]);
     } catch (PDOException $e) {
         // Silently fail - don't break main flow for logging
-        error_log("Activity log error: " . $e->getMessage());
     }
 }
 
@@ -160,7 +159,7 @@ if ($action === 'list') {
         $data = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $data]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data instalasi.']);
     }
     exit;
 }
@@ -212,7 +211,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['status' => 'success', 'message' => 'Work Order berhasil disimpan.']);
     } catch (PDOException $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menyimpan work order.']);
     }
     exit;
 }
@@ -282,7 +281,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         
         echo json_encode(['status' => 'success', 'message' => 'Data berhasil diperbarui.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui data instalasi.']);
     }
     exit;
 }
@@ -318,7 +317,7 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         
         echo json_encode(['status' => 'success', 'message' => 'Status berhasil diubah.']);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah status instalasi.']);
     }
     exit;
 }
@@ -418,7 +417,7 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['status' => 'success', 'message' => 'Siklus baru berhasil dibuat.']);
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memproses perpanjangan siklus.']);
     }
     exit;
 }
@@ -475,7 +474,7 @@ if ($action === 'transfer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memproses transfer instalasi.']);
     }
     exit;
 }
@@ -519,7 +518,7 @@ if ($action === 'bulk_assign' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memproses penugasan bulk.']);
     }
     exit;
 }
@@ -566,7 +565,7 @@ if ($action === 'bulk_schedule_visit' && $_SERVER['REQUEST_METHOD'] === 'POST') 
         ]);
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal menyimpan jadwal kunjungan.']);
     }
     exit;
 }
@@ -613,7 +612,7 @@ if ($action === 'bulk_toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'affected' => $affected
         ]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengubah status data secara bulk.']);
     }
     exit;
 }
@@ -731,7 +730,7 @@ if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } catch (PDOException $e) {
         $pdo->rollBack();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui data produk secara bulk.']);
     }
     exit;
 }

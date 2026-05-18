@@ -6,25 +6,17 @@ import App from './App.jsx'
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, errorInfo) {
-    this.setState({ errorInfo });
-    console.error("React Crash:", error, errorInfo);
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
   render() {
     if (this.state.hasError) {
       return (
         <div style={{ padding: '40px', background: '#fee2e2', color: '#991b1b', fontFamily: 'sans-serif' }}>
-          <h2>Oops, UI Crash! Terdapat error di React:</h2>
-          <pre style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', overflowX: 'auto' }}>
-            {this.state.error && this.state.error.toString()}
-            <br />
-            {this.state.errorInfo && this.state.errorInfo.componentStack}
-          </pre>
+          <h2>Terjadi gangguan pada aplikasi.</h2>
+          <p>Silakan refresh halaman atau hubungi admin jika masalah berlanjut.</p>
         </div>
       );
     }

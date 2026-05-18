@@ -22,7 +22,7 @@ if ($method === 'GET') {
             
             echo json_encode(['status' => 'success', 'data' => ['all' => $allPerms, 'assigned' => $assigned]]);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data otorisasi role.']);
         }
         exit;
     }
@@ -48,7 +48,7 @@ if ($method === 'GET') {
             $roles = $stmt->fetchAll();
             echo json_encode(['status' => 'success', 'data' => $roles]);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil daftar role.']);
         }
         exit;
     }
@@ -59,7 +59,7 @@ if ($method === 'GET') {
         $roles = $stmt->fetchAll();
         echo json_encode(['status' => 'success', 'data' => $roles]);
     } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Gagal mengambil data role.']);
     }
     exit;
 }
@@ -91,7 +91,7 @@ if ($method === 'POST') {
             echo json_encode(['status' => 'success', 'message' => 'Otoritas berhasil disimpan.']);
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menyimpan otorisasi role.']);
         }
         exit;
     }
@@ -111,7 +111,7 @@ if ($method === 'POST') {
             $stmt->execute([$role_name, $description, $user_id]);
             echo json_encode(['status' => 'success', 'message' => 'Role baru berhasil ditambahkan.']);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menambah role.']);
         }
         exit;
     }
@@ -132,7 +132,7 @@ if ($method === 'POST') {
             $stmt->execute([$role_name, $description, $status, $data['user_id'] ?? null, $id]);
             echo json_encode(['status' => 'success', 'message' => 'Data Role berhasil diperbarui.']);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui role.']);
         }
         exit;
     }
@@ -147,11 +147,11 @@ if ($method === 'POST') {
             $pdo->prepare("UPDATE roles SET status = 'inactive' WHERE id = ?")->execute([$id]);
             echo json_encode(['status' => 'success', 'message' => 'Role berhasil dinonaktifkan.']);
         } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menonaktifkan role.']);
         }
         exit;
     }
 }
 
-echo json_encode(['status' => 'error', 'message' => 'Method/action not recognized']);
+echo json_encode(['status' => 'error', 'message' => 'Permintaan tidak valid.']);
 ?>
