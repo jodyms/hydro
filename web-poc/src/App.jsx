@@ -61,12 +61,17 @@ const formatActivityFieldValue = (key, value) => {
 };
 
 const parseDateValue = (value) => {
-  if (!value || typeof value !== 'string') return null;
-  const [year, month, day] = value.split('-').map(Number);
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const datePart = raw.split(' ')[0].split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
   if ([year, month, day].some(Number.isNaN)) return null;
   const date = new Date(year, month - 1, day);
   return Number.isNaN(date.getTime()) ? null : date;
 };
+
+const isHistoryRecord = (value) => Number(value) === 1 || value === true || String(value).toLowerCase() === 'true';
 
 const getDiffDaysFromToday = (value) => {
   const targetDate = parseDateValue(value);
@@ -689,7 +694,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
               const count = j.data.filter(i =>
                 String(i.company_id) === String(companyId) &&
                 (!fromUserId || String(i.assigned_to) === String(fromUserId)) &&
-                (!i.is_history && Number(i.is_history) !== 1)
+                (!isHistoryRecord(i.is_history))
               ).length;
               setAffectedCount(count);
             }
@@ -833,7 +838,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
       return { ...inst, comp, scheduleDate, diffDays };
     }).filter(i => {
       if (!i.comp) return false;
-      if (i.is_history) return false;
+      if (isHistoryRecord(i.is_history)) return false;
       if (!i.scheduleDate || i.diffDays === null) return false;
       if (filterRegion && i.comp.region_name !== filterRegion) return false;
       if (filterType && i.comp.type !== filterType) return false;
@@ -3348,7 +3353,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
   if (!can('workorder_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1></div>;
 
   const filteredData = installations.filter(i => {
-    if (i.is_history || Number(i.is_history) === 1) return false;
+    if (isHistoryRecord(i.is_history)) return false;
 
     if (filterCompanies.length > 0 && !filterCompanies.includes(String(i.company_id))) return false;
 
@@ -4522,7 +4527,7 @@ export default function App() {
     const itemsToAdd = [];
 
     const processedList = installations.map(inst => {
-      if (inst.is_history || Number(inst.is_history) === 1 || inst.status === 'Done') return inst;
+      if (isHistoryRecord(inst.is_history) || inst.status === 'Done') return inst;
       const diffDays = Math.ceil((new Date(inst.replacement_date) - now) / (1000 * 60 * 60 * 24));
       if (diffDays < -30) {
         hasChanges = true;
