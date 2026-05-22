@@ -1,5 +1,6 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
@@ -26,10 +27,8 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Buat Session Token Sederhana
         $token = bin2hex(random_bytes(32));
-        $expires = date('Y-m-d H:i:s', strtotime('+2 hours'));
-        
-        $sessStmt = $pdo->prepare("INSERT INTO user_sessions (id, user_id, expires_at) VALUES (?, ?, ?)");
-        $sessStmt->execute([$token, $userData['id'], $expires]);
+        $sessStmt = $pdo->prepare("INSERT INTO user_sessions (id, user_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))");
+        $sessStmt->execute([$token, $userData['id']]);
         
         // Ambil Daftar Otoritas (Permissions)
         $permStmt = $pdo->prepare("SELECT p.permission_name FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?");
@@ -57,6 +56,8 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $auth = authz_require_auth($pdo);
+    authz_require_permission($auth, 'user_create');
     $data = json_decode(file_get_contents("php://input"), true);
     
     $username = $data['username'] ?? '';
@@ -90,6 +91,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'update_profile' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $auth = authz_require_auth($pdo);
     $data = json_decode(file_get_contents("php://input"), true);
     $user_id = $data['id'] ?? null;
     $email = $data['email'] ?? '';
@@ -99,6 +101,10 @@ if ($action === 'update_profile' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if(!$user_id || !$email) {
         echo json_encode(['status' => 'error', 'message' => 'Data profil utama (ID/Email) tidak boleh kosong.']);
         exit;
+    }
+
+    if ((int)$auth['user_id'] !== (int)$user_id && !authz_has_permission($auth, 'user_update')) {
+        authz_json_error(403, 'Akses ditolak. Anda hanya bisa mengubah profil sendiri.');
     }
 
     try {

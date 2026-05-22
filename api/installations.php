@@ -1,7 +1,9 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
+$auth = authz_require_auth($pdo);
 
 // Helper: log activity for installation changes
 function logActivity($pdo, $installationId, $companyId, $actionType, $description, $userId, $oldValues = null, $newValues = null) {
@@ -124,8 +126,17 @@ function buildStatusChangeAuditValues($oldRecord, $newRecord) {
 }
 
 if ($action === 'list') {
-    $user_id = $_GET['user_id'] ?? null;
-    $show_all = isset($_GET['show_all']) ? $_GET['show_all'] === 'true' : true;
+    authz_require_any_permission($auth, ['installation_read', 'sales_read', 'workorder_read', 'prospecting_read', 'history_read', 'dashboard_read']);
+    $user_id = $auth['user_id'];
+    $requestedShowAll = authz_get_bool($_GET['show_all'] ?? null, false);
+    $show_all = authz_allow_show_all($auth, $requestedShowAll, [
+        'installation_showall',
+        'sales_showall',
+        'workorder_showall',
+        'prospecting_showall',
+        'history_showall',
+        'dashboard_showall',
+    ]);
 
     try {
         $base_query = "SELECT i.*, c.name as company_name, ct.type_name as company_type, r.region_name as region,
@@ -139,7 +150,7 @@ if ($action === 'list') {
                        LEFT JOIN users u2 ON i.updated_by = u2.id
                        LEFT JOIN users u3 ON i.assigned_to = u3.id";
 
-        if ($show_all || !$user_id) {
+        if ($show_all) {
             // No filter: return all
             $stmt = $pdo->prepare($base_query . " ORDER BY i.replacement_date ASC");
             $stmt->execute();
@@ -165,12 +176,16 @@ if ($action === 'list') {
 }
 
 if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_create', 'installation_create', 'workorder_create']);
     $data = json_decode(file_get_contents("php://input"), true);
     
     $company_id = $data['companyId'] ?? null;
     $products = $data['products'] ?? [];
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     $override_assigned_to = $data['assigned_to'] ?? null;
+    if (!authz_has_permission($auth, 'installation_transfer')) {
+        $override_assigned_to = $user_id;
+    }
     
     if (!$company_id || empty($products)) {
         echo json_encode(['status' => 'error', 'message' => 'Company dan Produk wajib diisi.']);
@@ -217,9 +232,10 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_update', 'installation_update', 'workorder_update']);
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     
     if (!$id) {
         echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']);
@@ -287,9 +303,10 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_delete', 'installation_delete', 'workorder_delete']);
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     
     if (!$id) {
         echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']);
@@ -323,10 +340,11 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_update', 'installation_update', 'workorder_update']);
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     $next_date = $data['nextDate'] ?? null;
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     
     // New form fields (optional, falls back to current values)
     $new_product_name = $data['newProductName'] ?? null;
@@ -423,12 +441,13 @@ if ($action === 'renew' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'transfer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'installation_transfer');
     $data = json_decode(file_get_contents("php://input"), true);
     $company_id = $data['company_id'] ?? null;
     $from_user_id = $data['from_user_id'] ?? null;
     $to_user_id = $data['to_user_id'] ?? null;
     $reason = $data['reason'] ?? '';
-    $assigned_by = $data['user_id'] ?? null; // Who did the transfer
+    $assigned_by = $auth['user_id']; // Who did the transfer
     
     if (!$company_id || !$to_user_id) {
         echo json_encode(['status' => 'error', 'message' => 'Company ID dan User tujuan wajib diisi.']);
@@ -480,11 +499,12 @@ if ($action === 'transfer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'bulk_assign' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'prospecting_assign');
     $data = json_decode(file_get_contents("php://input"), true);
     $installation_ids = $data['installation_ids'] ?? [];
     $to_user_id = $data['to_user_id'] ?? null;
     $visit_date = $data['visit_date'] ?? null;
-    $assigned_by = $data['user_id'] ?? null;
+    $assigned_by = $auth['user_id'];
     
     if (empty($installation_ids) || !$to_user_id) {
         echo json_encode(['status' => 'error', 'message' => 'Data instalasi dan User tujuan wajib diisi.']);
@@ -524,10 +544,11 @@ if ($action === 'bulk_assign' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'bulk_schedule_visit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'prospecting_assign');
     $data = json_decode(file_get_contents("php://input"), true);
     $installation_ids = $data['installation_ids'] ?? [];
     $visit_date = $data['visit_date'] ?? null;
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
 
     if (empty($installation_ids) || !$visit_date) {
         echo json_encode(['status' => 'error', 'message' => 'Data instalasi dan tanggal kunjungan wajib diisi.']);
@@ -571,9 +592,10 @@ if ($action === 'bulk_schedule_visit' && $_SERVER['REQUEST_METHOD'] === 'POST') 
 }
 
 if ($action === 'bulk_toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_delete', 'installation_delete', 'workorder_delete']);
     $data = json_decode(file_get_contents("php://input"), true);
     $ids = $data['ids'] ?? [];
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     $activate = $data['activate'] ?? false; // true = activate, false = deactivate
 
     if (empty($ids)) {
@@ -618,9 +640,10 @@ if ($action === 'bulk_toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'bulk_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_any_permission($auth, ['sales_update', 'installation_update', 'workorder_update']);
     $data = json_decode(file_get_contents("php://input"), true);
     $items = $data['items'] ?? [];
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
 
     if (empty($items)) {
         echo json_encode(['status' => 'error', 'message' => 'Tidak ada data untuk diperbarui.']);

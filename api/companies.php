@@ -1,11 +1,15 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
+$auth = authz_require_auth($pdo);
 
 if ($action === 'list') {
-    $user_id = $_GET['user_id'] ?? null;
-    $show_all = isset($_GET['show_all']) ? ($_GET['show_all'] === 'true') : true;
+    authz_require_permission($auth, 'company_read');
+    $user_id = $auth['user_id'];
+    $requestedShowAll = authz_get_bool($_GET['show_all'] ?? null, false);
+    $show_all = authz_allow_show_all($auth, $requestedShowAll, ['company_showall']);
 
     try {
         $base_query = "SELECT c.*, r.region_name, i.industry_name, ct.type_name as type, u.username as creator_name, u2.username as last_editor_name 
@@ -16,7 +20,7 @@ if ($action === 'list') {
                        LEFT JOIN users u ON c.created_by = u.id
                        LEFT JOIN users u2 ON c.updated_by = u2.id";
         
-        if ($show_all || !$user_id) {
+        if ($show_all) {
             $stmt = $pdo->prepare($base_query . " ORDER BY c.name ASC");
             $stmt->execute();
         } else {
@@ -45,6 +49,7 @@ if ($action === 'list') {
 }
 
 if ($action === 'list_metadata') {
+    authz_require_permission($auth, 'company_read');
     try {
         $industries = $pdo->query("SELECT * FROM industries ORDER BY (industry_name = 'Lainnya'), industry_name ASC")->fetchAll();
         $types = $pdo->query("SELECT * FROM company_types ORDER BY type_name ASC")->fetchAll();
@@ -62,6 +67,7 @@ if ($action === 'list_metadata') {
 }
 
 if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'company_create');
     $data = json_decode(file_get_contents("php://input"), true);
     
     $name = $data['name'] ?? '';
@@ -70,7 +76,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_industry = $data['industry_name'] ?? ''; 
     $region_id = $data['region_id'] ?? null;
     $type_id = $data['type_id'] ?? 2; 
-    $user_id = $data['user_id'] ?? null; 
+    $user_id = $auth['user_id']; 
     
     if (!$name) {
         echo json_encode(['status' => 'error', 'message' => 'Nama perusahaan wajib diisi.']);
@@ -106,6 +112,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'company_update');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     $name = $data['name'] ?? '';
@@ -114,7 +121,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_industry = $data['industry_name'] ?? ''; 
     $region_id = $data['region_id'] ?? null;
     $type_id = $data['type_id'] ?? null;
-    $user_id = $data['user_id'] ?? null; // For potential tracking, but not changing created_by
+    $user_id = $auth['user_id']; // For potential tracking, but not changing created_by
     
     if (!$id || !$name) {
         echo json_encode(['status' => 'error', 'message' => 'ID dan Nama wajib diisi.']);
@@ -139,7 +146,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'industry_id' => $data['industry_id'],
             'region_id' => $data['region_id'],
             'type_id' => $data['type_id'],
-            'user_id' => $data['user_id'] ?? null
+            'user_id' => $auth['user_id']
         ]);
         echo json_encode(['status' => 'success', 'message' => 'Data berhasil diperbarui.']);
     } catch (PDOException $e) {
@@ -149,6 +156,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'company_delete');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     if (!$id) { echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']); exit; }
@@ -161,6 +169,7 @@ if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'convert_to_customer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'company_update');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     if (!$id) { echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']); exit; }

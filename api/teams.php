@@ -1,13 +1,17 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? 'list';
+$auth = authz_require_auth($pdo);
 
 if ($method === 'GET') {
     if ($action === 'list') {
-        $user_id = $_GET['user_id'] ?? null;
-        $show_all = $_GET['show_all'] === 'true';
+        authz_require_permission($auth, 'team_read');
+        $user_id = $auth['user_id'];
+        $requestedShowAll = authz_get_bool($_GET['show_all'] ?? null, false);
+        $show_all = authz_allow_show_all($auth, $requestedShowAll, ['team_showall']);
 
         try {
             if ($show_all) {
@@ -38,6 +42,7 @@ if ($method === 'GET') {
     }
 
     if ($action === 'members') {
+        authz_require_permission($auth, 'team_read');
         $team_id = $_GET['team_id'] ?? null;
         if (!$team_id) {
             echo json_encode(['status' => 'error', 'message' => 'ID tim wajib diisi.']);
@@ -59,9 +64,10 @@ if ($method === 'POST') {
     $data = json_decode(file_get_contents("php://input"), true);
     
     if ($action === 'create') {
+        authz_require_permission($auth, 'team_create');
         $name = $data['team_name'] ?? '';
         $desc = $data['description'] ?? '';
-        $created_by = $data['created_by'] ?? null;
+        $created_by = $auth['user_id'];
         $members = $data['members'] ?? []; // Array of user IDs
 
         if (!$name || !$created_by) {
@@ -93,6 +99,7 @@ if ($method === 'POST') {
     }
 
     if ($action === 'update') {
+        authz_require_permission($auth, 'team_update');
         $id = $data['id'] ?? null;
         $name = $data['team_name'] ?? '';
         $desc = $data['description'] ?? '';
@@ -108,7 +115,7 @@ if ($method === 'POST') {
             $pdo->beginTransaction();
 
             $stmt = $pdo->prepare("UPDATE teams SET team_name = ?, description = ?, status = ?, updated_by = ? WHERE id = ?");
-            $stmt->execute([$name, $desc, $status, $data['user_id'] ?? null, $id]);
+            $stmt->execute([$name, $desc, $status, $auth['user_id'], $id]);
 
             // Sync members: delete all and re-insert
             $pdo->prepare("DELETE FROM team_members WHERE team_id = ?")->execute([$id]);
@@ -129,6 +136,7 @@ if ($method === 'POST') {
     }
 
     if ($action === 'deactivate') {
+        authz_require_permission($auth, 'team_delete');
         $id = $data['id'] ?? null;
         if (!$id) {
             echo json_encode(['status' => 'error', 'message' => 'ID tim wajib diisi.']);

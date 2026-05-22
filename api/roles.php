@@ -1,12 +1,15 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
+$auth = authz_require_auth($pdo);
 
 // GET: roles list or permissions matrix
 if ($method === 'GET') {
     if ($action === 'permissions') {
+        authz_require_permission($auth, 'role_set_authority');
         $role_id = $_GET['role_id'] ?? null;
         try {
             // Group permissions by menu prefix for nice UI
@@ -28,11 +31,13 @@ if ($method === 'GET') {
     }
 
     if ($action === 'list') {
-        $user_id = $_GET['user_id'] ?? null;
-        $show_all = isset($_GET['show_all']) ? ($_GET['show_all'] === 'true') : true;
+        authz_require_permission($auth, 'role_read');
+        $user_id = $auth['user_id'];
+        $requestedShowAll = authz_get_bool($_GET['show_all'] ?? null, false);
+        $show_all = authz_allow_show_all($auth, $requestedShowAll, ['role_showall']);
 
         try {
-            if ($show_all || !$user_id) {
+            if ($show_all) {
                 $stmt = $pdo->query("SELECT r.*, c.username as creator_name, u2.username as last_editor_name FROM roles r LEFT JOIN users c ON r.created_by = c.id LEFT JOIN users u2 ON r.updated_by = u2.id ORDER BY r.id DESC");
             } else {
                 $stmt = $pdo->prepare("SELECT DISTINCT r.*, c.username as creator_name, u2.username as last_editor_name 
@@ -54,6 +59,7 @@ if ($method === 'GET') {
     }
 
     // Default: list roles
+    authz_require_any_permission($auth, ['role_read', 'user_read']);
     try {
         $stmt = $pdo->query("SELECT id, role_name, description, status FROM roles ORDER BY id ASC");
         $roles = $stmt->fetchAll();
@@ -69,6 +75,7 @@ if ($method === 'POST') {
     $data = json_decode(file_get_contents("php://input"), true);
 
     if ($action === 'save_permissions') {
+        authz_require_permission($auth, 'role_set_authority');
         $role_id = $data['role_id'] ?? null;
         $permission_ids = $data['permission_ids'] ?? [];
         
@@ -97,9 +104,10 @@ if ($method === 'POST') {
     }
 
     if ($action === 'create') {
+        authz_require_permission($auth, 'role_create');
         $role_name = $data['role_name'] ?? '';
         $description = $data['description'] ?? '';
-        $user_id = $data['user_id'] ?? null;
+        $user_id = $auth['user_id'];
 
         if (!$role_name) {
             echo json_encode(['status' => 'error', 'message' => 'Nama Role tidak boleh kosong.']);
@@ -117,6 +125,7 @@ if ($method === 'POST') {
     }
 
     if ($action === 'update') {
+        authz_require_permission($auth, 'role_update');
         $id = $data['id'] ?? null;
         $role_name = $data['role_name'] ?? '';
         $description = $data['description'] ?? '';
@@ -129,7 +138,7 @@ if ($method === 'POST') {
 
         try {
             $stmt = $pdo->prepare("UPDATE roles SET role_name = ?, description = ?, status = ?, updated_by = ? WHERE id = ?");
-            $stmt->execute([$role_name, $description, $status, $data['user_id'] ?? null, $id]);
+            $stmt->execute([$role_name, $description, $status, $auth['user_id'], $id]);
             echo json_encode(['status' => 'success', 'message' => 'Data Role berhasil diperbarui.']);
         } catch (PDOException $e) {
             echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui role.']);
@@ -138,6 +147,7 @@ if ($method === 'POST') {
     }
 
     if ($action === 'deactivate') {
+        authz_require_permission($auth, 'role_delete');
         $id = $data['id'] ?? null;
         if (!$id) {
             echo json_encode(['status' => 'error', 'message' => 'ID Role tidak boleh kosong.']);

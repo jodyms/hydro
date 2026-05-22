@@ -1,9 +1,12 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
+$auth = authz_require_auth($pdo);
 
 if ($action === 'list') {
+    authz_require_permission($auth, 'region_read');
     try {
         $stmt = $pdo->prepare("SELECT r.*, u2.username as last_editor_name FROM regions r LEFT JOIN users u2 ON r.updated_by = u2.id ORDER BY status ASC, region_name ASC");
         $stmt->execute();
@@ -16,9 +19,10 @@ if ($action === 'list') {
 }
 
 if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'region_create');
     $data = json_decode(file_get_contents("php://input"), true);
     $name = $data['region_name'] ?? '';
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     
     if (!$name) {
         echo json_encode(['status' => 'error', 'message' => 'Nama wilayah wajib diisi.']);
@@ -36,6 +40,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'region_update');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     $name = $data['region_name'] ?? '';
@@ -47,7 +52,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     try {
         $stmt = $pdo->prepare("UPDATE regions SET region_name = ?, updated_by = ? WHERE id = ?");
-        $stmt->execute([$name, $data['user_id'] ?? null, $id]);
+        $stmt->execute([$name, $auth['user_id'], $id]);
         echo json_encode(['status' => 'success', 'message' => 'Region berhasil diperbarui.']);
     } catch (PDOException $e) {
         echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui region.']);
@@ -56,6 +61,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'region_delete');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     if (!$id) { echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']); exit; }

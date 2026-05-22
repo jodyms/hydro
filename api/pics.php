@@ -1,11 +1,15 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
+$auth = authz_require_auth($pdo);
 
 if ($action === 'list') {
-    $user_id = $_GET['user_id'] ?? null;
-    $show_all = isset($_GET['show_all']) ? ($_GET['show_all'] === 'true') : true;
+    authz_require_permission($auth, 'pic_read');
+    $user_id = $auth['user_id'];
+    $requestedShowAll = authz_get_bool($_GET['show_all'] ?? null, false);
+    $show_all = authz_allow_show_all($auth, $requestedShowAll, ['pic_showall']);
 
     try {
         $base_query = "SELECT p.*, c.name as company_name, u2.username as last_editor_name 
@@ -13,7 +17,7 @@ if ($action === 'list') {
                        JOIN companies c ON p.company_id = c.id 
                        LEFT JOIN users u2 ON p.updated_by = u2.id";
         
-        if ($show_all || !$user_id) {
+        if ($show_all) {
             $stmt = $pdo->prepare($base_query . " ORDER BY p.status ASC, p.name ASC");
             $stmt->execute();
         } else {
@@ -42,6 +46,7 @@ if ($action === 'list') {
 }
 
 if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'pic_create');
     $data = json_decode(file_get_contents("php://input"), true);
     
     $company_id = $data['company_id'] ?? null;
@@ -51,7 +56,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $dob = $data['dob'] ?? null;
     $email = $data['email'] ?? '';
     $address = $data['address'] ?? '';
-    $user_id = $data['user_id'] ?? null;
+    $user_id = $auth['user_id'];
     
     if (!$company_id || !$name) {
         echo json_encode(['status' => 'error', 'message' => 'Company dan Nama PIC wajib diisi.']);
@@ -69,6 +74,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'pic_update');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     $company_id = $data['company_id'] ?? null;
@@ -86,7 +92,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     try {
         $stmt = $pdo->prepare("UPDATE company_pics SET company_id = ?, name = ?, job_title = ?, phone = ?, dob = ?, email = ?, address = ?, updated_by = ? WHERE id = ?");
-        $stmt->execute([$company_id, $name, $job_title, $phone, $dob ?: null, $email, $address, $data['user_id'] ?? null, $id]);
+        $stmt->execute([$company_id, $name, $job_title, $phone, $dob ?: null, $email, $address, $auth['user_id'], $id]);
         echo json_encode(['status' => 'success', 'message' => 'PIC berhasil diperbarui.']);
     } catch (PDOException $e) {
         echo json_encode(['status' => 'error', 'message' => 'Gagal memperbarui data PIC.']);
@@ -95,6 +101,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'toggle_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    authz_require_permission($auth, 'pic_delete');
     $data = json_decode(file_get_contents("php://input"), true);
     $id = $data['id'] ?? null;
     if (!$id) { echo json_encode(['status' => 'error', 'message' => 'ID wajib diisi.']); exit; }

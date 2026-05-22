@@ -1,5 +1,9 @@
 <?php
 require 'db.php';
+require_once 'authz.php';
+
+$auth = authz_require_auth($pdo);
+authz_require_any_permission($auth, ['role_read', 'role_set_authority']);
 
 // Returns an array of permission_name strings for a given role_id
 $role_id = $_GET['role_id'] ?? null;

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, AlertCircle } from 'lucide-react';
 import './Login.css';
+import { apiFetch } from '../lib/apiFetch';
 
 const LOGO_PATH = '/hui-logo.png'; 
 
@@ -19,7 +20,7 @@ function Login({ setUser }) {
     setLoginError('');
 
     try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=login`, {
+        const response = await apiFetch(`${import.meta.env.VITE_API_URL}/auth.php?action=login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })

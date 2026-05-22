@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { apiFetch } from '../lib/apiFetch';
 
 const ACTIVITY_FIELD_LABELS = {
   company_name: 'Company',
@@ -109,7 +110,7 @@ function CompanyHistoryModalInner({ onClose, company, historyItems }) {
   useEffect(() => {
     let cancelled = false;
     setLoadingLogs(true);
-    fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
+    apiFetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${company.id}`)
       .then(r => r.json())
       .then(json => {
         if (!cancelled) setCompanyLogs(json.status === 'success' ? json.data : []);

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Database, Users, Wrench, MapPin, ClipboardList, Plus, PlusSquare, PlusCircle, Search, Map, X, Cake, Calendar, Filter, Eye, ChevronLeft, ChevronRight, Archive, User, Shield, ShieldCheck, Lock, AlertCircle, CheckCircle2, Loader2, LogOut, Settings, Download, Send, Info, Bell, BarChart3, Clock, MessageSquare } from 'lucide-react';
+import { apiFetch } from './lib/apiFetch';
 // --- Constants ---
 let STATUS_OPTIONS = ['Reminder Sent', 'Offering Product', 'Scheduled for Replacement', 'Done', 'Skip', 'Follow up'];
 const COMPANY_TYPES = ['Customer', 'Prospek'];
@@ -243,7 +244,7 @@ function Header({ user, setUser }) {
     setIsLoading(true);
     setStatusMsg(null);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth.php?action=update_profile`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/auth.php?action=update_profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -337,7 +338,7 @@ function Sidebar({ permissions, user }) {
     { type: 'header', label: 'Master Data' },
     { path: '/company', label: 'Data Company', icon: Database, permission: 'company_read' },
     { path: '/pic', label: 'Data PIC', icon: Users, permission: 'pic_read' },
-    { path: '/master-region', label: 'Master Region', icon: Map },
+    { path: '/master-region', label: 'Master Region', icon: Map, permission: 'region_read' },
     { type: 'header', label: 'User Management' },
     { path: '/master-user', label: 'Master User', icon: User, permission: 'user_read' },
     { path: '/master-role', label: 'Master Role', icon: Shield, permission: 'role_read' },
@@ -677,7 +678,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       setReason('');
       setStatusMsg(null);
       // Fetch all active users for the picker
-      fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser?.id || ''}&show_all=true`)
+      apiFetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser?.id || ''}&show_all=true`)
         .then(r => r.json())
         .then(j => { if (j.status === 'success') setAllUsers(j.data.filter(u => u.status === 'active')); })
         .catch(() => setStatusMsg('❌ Gagal memuat daftar user.'));
@@ -687,7 +688,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
       } else {
         // Count affected installations - Sync with user permissions to avoid 16 vs 7 discrepancy
         const showAll = currentUser?.permissions?.includes('workorder_showall') || currentUser?.role_name === 'Super Admin';
-        fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`)
           .then(r => r.json())
           .then(j => {
             if (j.status === 'success') {
@@ -712,7 +713,7 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
     setIsSaving(true);
     setStatusMsg(null);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=transfer`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=transfer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1429,8 +1430,8 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
           </div>
           <div style={{ padding: '20px' }}>
             {STATUS_OPTIONS.map(status => {
-              const count = installations.filter(i => i.status === status && !Number(i.is_history)).length;
-              const totalActive = installations.filter(i => !Number(i.is_history)).length || 1;
+              const count = installations.filter(i => i.status === status && !isHistoryRecord(i.is_history)).length;
+              const totalActive = installations.filter(i => !isHistoryRecord(i.is_history)).length || 1;
               const pct = (count / totalActive) * 100;
               return (
                 <div key={status} style={{ marginBottom: '16px' }}>
@@ -1471,9 +1472,9 @@ function CompanyPage({ can, currentUser }) {
     try {
       const showAll = can('company_showall');
       const [resC, resM, resR] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`),
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list_metadata`),
-        fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${showAll}`),
+        apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list_metadata`),
+        apiFetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`)
       ]);
       const dataC = await resC.json();
       const dataM = await resM.json();
@@ -1502,7 +1503,7 @@ function CompanyPage({ can, currentUser }) {
         payload.industry_name = newIndustry;
       }
       const action = formData.id ? 'update' : 'create';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=${action}`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1520,7 +1521,7 @@ function CompanyPage({ can, currentUser }) {
   const handleToggleStatus = async (id) => {
     if (window.confirm("Ubah status keaktifan perusahaan ini?")) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=toggle_status`, {
+        const res = await apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=toggle_status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id })
@@ -1625,7 +1626,7 @@ function RegionPage({ can, currentUser }) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`);
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`);
       const d = await res.json();
       if (d.status === 'success') setRegions(d.data || []);
     } catch {
@@ -1640,7 +1641,7 @@ function RegionPage({ can, currentUser }) {
     setIsSaving(true);
     try {
       const action = formData.id ? 'update' : 'create';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=${action}`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/regions.php?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: formData.id, region_name: formData.name, user_id: currentUser?.id })
@@ -1654,7 +1655,7 @@ function RegionPage({ can, currentUser }) {
   const handleToggleStatus = async (id) => {
     if (window.confirm("Ubah status keaktifan region ini?")) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=toggle_status`, {
+        const res = await apiFetch(`${import.meta.env.VITE_API_URL}/regions.php?action=toggle_status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id })
@@ -1725,8 +1726,8 @@ function PICPage({ can, currentUser }) {
       const picShowAll = can('pic_showall');
       const compShowAll = can('company_showall');
       const [resP, resC] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=list&user_id=${currentUser?.id || ''}&show_all=${picShowAll}`),
-        fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${compShowAll}`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/pics.php?action=list&user_id=${currentUser?.id || ''}&show_all=${picShowAll}`),
+        apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser?.id || ''}&show_all=${compShowAll}`)
       ]);
       const dP = await resP.json();
       const dC = await resC.json();
@@ -1744,7 +1745,7 @@ function PICPage({ can, currentUser }) {
     setIsSaving(true);
     try {
       const action = formData.id ? 'update' : 'create';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=${action}`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/pics.php?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, user_id: currentUser?.id })
@@ -1758,7 +1759,7 @@ function PICPage({ can, currentUser }) {
   const handleToggleStatus = async (id) => {
     if (window.confirm("Ubah status keaktifan PIC ini?")) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/pics.php?action=toggle_status`, {
+        const res = await apiFetch(`${import.meta.env.VITE_API_URL}/pics.php?action=toggle_status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id })
@@ -1894,7 +1895,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   const reloadInstallations = async () => {
     try {
       const showAll = can('sales_showall');
-      const resList = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
+      const resList = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
       const jsonList = await resList.json();
       if (jsonList.status === 'success') setInstallations(jsonList.data);
     } catch {
@@ -1906,7 +1907,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=create`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=create`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, user_id: currentUser.id })
       });
@@ -1923,7 +1924,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   const handleBulkEditSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_update`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: editItems, user_id: currentUser.id })
       });
@@ -1941,7 +1942,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     const label = activate ? 'mengaktifkan' : 'menonaktifkan';
     if (!window.confirm(`Anda akan ${label} ${selectedIds.length} item. Lanjutkan?`)) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_toggle_status`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_toggle_status`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: selectedIds, activate, user_id: currentUser.id })
       });
@@ -2043,7 +2044,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
     if (!renewData) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=renew`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=renew`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: renewData.id,
@@ -2067,7 +2068,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
   const openHistoryModal = (company) => {
     const items = installations.filter(i =>
-      String(i.company_id) === String(company.id) && Number(i.is_history) === 1
+      String(i.company_id) === String(company.id) && isHistoryRecord(i.is_history)
     );
     setHistoryModalCompany(company);
     setHistoryModalItems(items);
@@ -2075,7 +2076,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
   };
 
   const activeInstallations = useMemo(() => installations.filter(i => {
-    if (Number(i.is_history) === 1) return false;
+    if (isHistoryRecord(i.is_history)) return false;
     if (!showInactive && (i.status_active === '0' || Number(i.status_active) === 0)) return false;
     if (filterType && i.company_type !== filterType) return false;
     if (filterRegions.length > 0 && !filterRegions.includes(i.region)) return false;
@@ -2192,7 +2193,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
           const isExpanded = expandedCompanies[group.company.id];
           const companySelected = group.items.every(i => selectedIds.includes(i.id));
           const nearExpiry = group.items.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length;
-          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && Number(i.is_history) === 1).length;
+          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && isHistoryRecord(i.is_history)).length;
           return (
             <div key={group.company.id} style={{ marginBottom: '12px', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', background: 'white', transition: 'all 0.2s', boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.06)' : 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', cursor: 'pointer', background: isExpanded ? '#f8fafc' : 'white', gap: '16px', transition: 'background 0.2s' }} onClick={() => toggleExpand(group.company.id)}>
@@ -2315,8 +2316,8 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                     </select>
                   </div>
                   {formData.companyId && (() => {
-                    const existingProds = installations.filter(i => String(i.company_id) === String(formData.companyId) && !Number(i.is_history));
-                    const historyCount = installations.filter(i => String(i.company_id) === String(formData.companyId) && Number(i.is_history) === 1).length;
+                    const existingProds = installations.filter(i => String(i.company_id) === String(formData.companyId) && !isHistoryRecord(i.is_history));
+                    const historyCount = installations.filter(i => String(i.company_id) === String(formData.companyId) && isHistoryRecord(i.is_history)).length;
                     return (
                       <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -2625,7 +2626,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
   const reloadInstallations = async () => {
     try {
       const hasShowAll = can('installation_showall');
-      const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
+      const resL = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
       if (jsonL.status === 'success') setInstallations(jsonL.data);
     } catch {
@@ -2635,7 +2636,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
 
   const updateStatus = async (id, newStatus) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus, user_id: currentUser?.id })
@@ -2651,7 +2652,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2711,7 +2712,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
     if (!editData?.company_id) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=create`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2745,7 +2746,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
   };
 
   const activeInstallations = useMemo(() => installations.filter(i => {
-    if (Number(i.is_history) === 1) return false;
+    if (isHistoryRecord(i.is_history)) return false;
     if (!showInactive && (i.status_active === '0' || Number(i.status_active) === 0)) return false;
     if (filterType && i.company_type !== filterType) return false;
     if (filterRegions.length > 0 && !filterRegions.includes(i.region)) return false;
@@ -2835,7 +2836,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
         ) : currentGroups.map(group => {
           const isExpanded = expandedCompanies[group.company.id];
           const nearExpiry = group.items.filter(i => { const d = Math.ceil((new Date(i.replacement_date) - new Date()) / 86400000); return d <= 30 && i.status !== 'Done'; }).length;
-          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && Number(i.is_history) === 1).length;
+          const historyCount = installations.filter(i => String(i.company_id) === String(group.company.id) && isHistoryRecord(i.is_history)).length;
           return (
             <div key={group.company.id} style={{ marginBottom: '12px', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', background: 'white', transition: 'all 0.2s', boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.06)' : 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', cursor: 'pointer', background: isExpanded ? '#f8fafc' : 'white', gap: '16px', transition: 'background 0.2s' }} onClick={() => toggleExpand(group.company.id)}>
@@ -3072,7 +3073,7 @@ function ProspectingPage({ installations, can, regions, currentUser, onAssignmen
   if (!can('prospecting_read')) return <div className="page-container"><h1 className="page-title">⛔ Akses Ditolak</h1><p>Anda tidak memiliki otoritas <code>prospecting_read</code>.</p></div>;
 
   const activeInstallations = useMemo(() => installations.filter(i => {
-    if (Number(i.is_history) === 1) return false;
+    if (isHistoryRecord(i.is_history)) return false;
     if (!showInactive && (i.status_active === '0' || Number(i.status_active) === 0)) return false;
     if (regionFilter && i.region !== regionFilter) return false;
     if (picFilter === '__unassigned__' && i.assigned_to) return false;
@@ -3134,7 +3135,7 @@ function ProspectingPage({ installations, can, regions, currentUser, onAssignmen
     if (!visitDate) return alert('Tentukan tanggal kunjungan terlebih dahulu.');
     setIsAssigning(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_schedule_visit`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=bulk_schedule_visit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3367,7 +3368,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
   const reloadInstallations = async () => {
     try {
       const hasShowAll = can('workorder_showall');
-      const resL = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
+      const resL = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${hasShowAll}`);
       const jsonL = await resL.json();
       if (jsonL.status === 'success') setInstallations(jsonL.data);
     } catch {
@@ -3377,7 +3378,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
 
   const updateStatus = async (id, newStatus) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus, user_id: currentUser.id })
@@ -3391,7 +3392,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
 
   const updateNotes = async (id, newNotes) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, notes: newNotes, user_id: currentUser.id })
@@ -3451,7 +3452,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
     setRenewSaving(true);
     setRenewStatusMsg(null);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=renew`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=renew`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3714,8 +3715,8 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
     const showAll = canHistoryShowAll;
 
     Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json()),
-      fetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json())
+      apiFetch(`${import.meta.env.VITE_API_URL}/installations.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json()),
+      apiFetch(`${import.meta.env.VITE_API_URL}/companies.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`).then(r => r.json())
     ]).then(([installationsJson, companiesJson]) => {
       if (cancelled) return;
 
@@ -3730,7 +3731,7 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
 
   const historicalGroups = useMemo(() => {
     const list = historyInstallations.filter(i => {
-      if (!Number(i.is_history)) return false;
+      if (!isHistoryRecord(i.is_history)) return false;
       const comp = historyCompanies.find(c => Number(c.id) === Number(i.company_id));
       if (!comp) return false;
       const searchMatch = comp.name.toLowerCase().includes(search.toLowerCase()) || (i.product_name || '').toLowerCase().includes(search.toLowerCase());
@@ -3763,7 +3764,7 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
 
     const results = await Promise.allSettled(
       missingIds.map(id =>
-        fetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/activity_logs.php?action=list&company_id=${id}`)
           .then(r => r.json())
       )
     );
@@ -4010,8 +4011,8 @@ function UserPage({ can, currentUser }) {
     try {
       const showAll = can('user_showall');
       const [resU, resR] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=${showAll}`),
-        fetch(`${import.meta.env.VITE_API_URL}/roles.php`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=${showAll}`),
+        apiFetch(`${import.meta.env.VITE_API_URL}/roles.php`)
       ]);
       const jU = await resU.json(); const jR = await resR.json();
       if (jU.status === 'success') setUsersInfo(jU.data);
@@ -4032,7 +4033,7 @@ function UserPage({ can, currentUser }) {
     setIsLoading(true);
     try {
       const ep = isEdit ? `${import.meta.env.VITE_API_URL}/users.php?action=update` : `${import.meta.env.VITE_API_URL}/auth.php?action=register`;
-      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...formData, user_id: currentUser.id }) });
+      const res = await apiFetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...formData, user_id: currentUser.id }) });
       const d = await res.json();
       if (d.status === 'success') { setStatusType('success'); setStatusMsg(d.message); fetchData(); setTimeout(() => setModalOpen(false), 1000); }
       else { setStatusType('error'); setStatusMsg(d.message); }
@@ -4041,7 +4042,7 @@ function UserPage({ can, currentUser }) {
 
   const handleDeactivate = async (u) => {
     if (!window.confirm(`Nonaktifkan user "${u.username}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
+    try { const r = await apiFetch(`${import.meta.env.VITE_API_URL}/users.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
   };
 
   const columns = [
@@ -4132,7 +4133,7 @@ function RolePage({ can, currentUser }) {
     setIsLoading(true);
     try {
       const showAll = can('role_showall');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/roles.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`);
       const json = await res.json();
       if (json.status === 'success') setRoles(json.data);
     }
@@ -4151,7 +4152,7 @@ function RolePage({ can, currentUser }) {
     e.preventDefault(); setEditSaving(true); setEditStatus(null);
     try {
       const action = isEdit ? 'update' : 'create';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editForm, user_id: currentUser.id }) });
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/roles.php?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editForm, user_id: currentUser.id }) });
       const d = await res.json();
       setEditStatus(d.message);
       if (d.status === 'success') { fetchRoles(); setTimeout(() => { setEditModal(false); setEditStatus(null); }, 1000); }
@@ -4161,12 +4162,12 @@ function RolePage({ can, currentUser }) {
 
   const handleDeactivateRole = async (r) => {
     if (!window.confirm(`Nonaktifkan role "${r.role_name}"?`)) return;
-    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) }); const d = await res.json(); if (d.status === 'success') fetchRoles(); } catch { setEditStatus('Gagal menghubungi server.'); }
+    try { const res = await apiFetch(`${import.meta.env.VITE_API_URL}/roles.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) }); const d = await res.json(); if (d.status === 'success') fetchRoles(); } catch { setEditStatus('Gagal menghubungi server.'); }
   };
 
   const openPermissions = async (role) => {
     setPermRoleId(role.id); setPermRoleName(role.role_name); setPermStatus(null);
-    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json = await res.json(); if (json.status === 'success') { setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number)); } } catch { setPermStatus('Gagal memuat data otorisasi.'); }
+    try { const res = await apiFetch(`${import.meta.env.VITE_API_URL}/roles.php?action=permissions&role_id=${role.id}`); const json = await res.json(); if (json.status === 'success') { setAllPerms(json.data.all); setAssignedPerms(json.data.assigned.map(Number)); } } catch { setPermStatus('Gagal memuat data otorisasi.'); }
     setPermModal(true);
   };
   const togglePerm = (pid) => setAssignedPerms(prev => prev.includes(pid) ? prev.filter(x => x !== pid) : [...prev, pid]);
@@ -4177,7 +4178,7 @@ function RolePage({ can, currentUser }) {
   };
   const savePermissions = async () => {
     setPermSaving(true); setPermStatus(null);
-    try { const res = await fetch(`${import.meta.env.VITE_API_URL}/roles.php?action=save_permissions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role_id: permRoleId, permission_ids: assignedPerms }) }); const json = await res.json(); setPermStatus(json.message); if (json.status === 'success') setTimeout(() => { setPermModal(false); setPermStatus(null); }, 1200); }
+    try { const res = await apiFetch(`${import.meta.env.VITE_API_URL}/roles.php?action=save_permissions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role_id: permRoleId, permission_ids: assignedPerms }) }); const json = await res.json(); setPermStatus(json.message); if (json.status === 'success') setTimeout(() => { setPermModal(false); setPermStatus(null); }, 1200); }
     catch { setPermStatus('Gagal menghubungi server.'); } finally { setPermSaving(false); }
   };
 
@@ -4318,8 +4319,8 @@ function TeamPage({ can, currentUser }) {
     try {
       const showAll = can('team_showall');
       const [resT, resU] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`),
-        fetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=true`)
+        apiFetch(`${import.meta.env.VITE_API_URL}/teams.php?action=list&user_id=${currentUser.id}&show_all=${showAll}`),
+        apiFetch(`${import.meta.env.VITE_API_URL}/users.php?user_id=${currentUser.id}&show_all=true`)
       ]);
       const jt = await resT.json(); const ju = await resU.json();
       if (jt.status === 'success') setTeams(jt.data);
@@ -4333,7 +4334,7 @@ function TeamPage({ can, currentUser }) {
   const openEdit = async (t) => {
     setIsEdit(true); setStatusMsg(null); setUserSearch('');
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=members&team_id=${t.id}`);
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/teams.php?action=members&team_id=${t.id}`);
       const json = await res.json();
       setFormData({ id: t.id, team_name: t.team_name, description: t.description || '', status: t.status || 'active', members: json.data || [] });
     } catch { setStatusMsg('Gagal memuat anggota tim.'); }
@@ -4346,7 +4347,7 @@ function TeamPage({ can, currentUser }) {
     const action = isEdit ? 'update' : 'create';
     const payload = isEdit ? formData : { ...formData, created_by: currentUser.id };
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=${action}`, {
+      const res = await apiFetch(`${import.meta.env.VITE_API_URL}/teams.php?action=${action}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, user_id: currentUser.id })
       });
       const d = await res.json();
@@ -4357,7 +4358,7 @@ function TeamPage({ can, currentUser }) {
 
   const handleDeactivate = async (t) => {
     if (!window.confirm(`Nonaktifkan tim "${t.team_name}"?`)) return;
-    try { const r = await fetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
+    try { const r = await apiFetch(`${import.meta.env.VITE_API_URL}/teams.php?action=deactivate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id }) }); const d = await r.json(); if (d.status === 'success') fetchData(); } catch { alert('Gagal menghubungi server.'); }
   };
 
   const toggleMember = (uid) => {
@@ -4466,7 +4467,22 @@ export default function App() {
   const [installations, setInstallations] = useState([]);
   const [systemNotice, setSystemNotice] = useState(null);
 
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('auth_user')));
+  const [user, setUser] = useState(() => {
+    const token = localStorage.getItem('auth_token');
+    const rawUser = localStorage.getItem('auth_user');
+    if (!token || !rawUser) {
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_token');
+      return null;
+    }
+    try {
+      return JSON.parse(rawUser);
+    } catch {
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_token');
+      return null;
+    }
+  });
   const [permissions, setPermissions] = useState(() => (user?.permissions || []));
 
   const fetchData = async () => {
@@ -4481,10 +4497,10 @@ export default function App() {
       const picUrl = `${import.meta.env.VITE_API_URL}/pics.php?action=list&user_id=${user?.id || ''}&show_all=${picShowAll}`;
 
       const [resC, resR, resI, resP] = await Promise.all([
-        fetch(compUrl),
-        fetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`),
-        fetch(instUrl),
-        fetch(picUrl)
+        apiFetch(compUrl),
+        apiFetch(`${import.meta.env.VITE_API_URL}/regions.php?action=list`),
+        apiFetch(instUrl),
+        apiFetch(picUrl)
       ]);
       const jsonC = await resC.json();
       const jsonR = await resR.json();
@@ -4505,7 +4521,18 @@ export default function App() {
 
   useEffect(() => {
     const handleStorage = () => {
-      const authUser = JSON.parse(localStorage.getItem('auth_user'));
+      const token = localStorage.getItem('auth_token');
+      const rawUser = localStorage.getItem('auth_user');
+      let authUser = null;
+      if (token && rawUser) {
+        try {
+          authUser = JSON.parse(rawUser);
+        } catch {
+          authUser = null;
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_token');
+        }
+      }
       if (JSON.stringify(authUser) !== JSON.stringify(user)) {
         setUser(authUser);
         setPermissions(authUser?.permissions || []);
@@ -4519,7 +4546,7 @@ export default function App() {
     setPermissions(user?.permissions || []);
   }, [user]);
 
-  const can = (p) => permissions.includes(p);
+  const can = (p) => permissions.includes('all_access') || permissions.includes(p);
 
   useEffect(() => {
     const now = new Date();
@@ -4551,26 +4578,28 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/*" element={
+          user?.id ? (
           <div className="app-container">
             <Sidebar permissions={permissions} user={user} />
             <main className="main-content">
               <Header user={user} setUser={setUser} />
               <Routes>
-                <Route path="/" element={can('dashboard_read') ? <Dashboard companies={companies} regions={regions} installations={installations} pics={pics} systemNotice={systemNotice} setSystemNotice={setSystemNotice} can={can} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/company" element={can('company_read') ? <CompanyPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/pic" element={can('pic_read') ? <PICPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/master-role" element={can('role_read') ? <RolePage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
-                <Route path="/master-team" element={can('team_read') ? <TeamPage can={can} currentUser={user} /> : <div className="page-container">Akses Ditolak</div>} />
+                <Route path="/" element={can('dashboard_read') ? <Dashboard companies={companies} regions={regions} installations={installations} pics={pics} systemNotice={systemNotice} setSystemNotice={setSystemNotice} can={can} /> : <Navigate to="/login" replace />} />
+                <Route path="/company" element={can('company_read') ? <CompanyPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/pic" element={can('pic_read') ? <PICPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <Navigate to="/login" replace />} />
+                <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <Navigate to="/login" replace />} />
+                <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/master-role" element={can('role_read') ? <RolePage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/master-team" element={can('team_read') ? <TeamPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
               </Routes>
             </main>
           </div>
+          ) : <Navigate to="/login" replace />
         } />
       </Routes>
     </BrowserRouter>
