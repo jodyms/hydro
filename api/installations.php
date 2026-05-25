@@ -195,8 +195,8 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
         
-        $stmt = $pdo->prepare("INSERT INTO installations (company_id, product_name, installation_date, replacement_date, maintenance_cycle_value, maintenance_cycle_unit, status, created_by, assigned_to) 
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO installations (company_id, product_name, installation_date, replacement_date, maintenance_cycle_value, maintenance_cycle_unit, status, created_by, assigned_to, product_notes) 
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
         foreach ($products as $prod) {
             $stmt->execute([
@@ -208,7 +208,8 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prod['recurringUnit'] ?? 'months',
                 $prod['status'] ?? 'Scheduled',
                 $user_id,
-                $override_assigned_to ?? $user_id
+                $override_assigned_to ?? $user_id,
+                $prod['productNotes'] ?? ''
             ]);
             $newId = $pdo->lastInsertId();
             $newSnapshot = getInstallationAuditSnapshot($pdo, $newId);

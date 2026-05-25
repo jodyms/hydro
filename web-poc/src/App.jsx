@@ -50,7 +50,7 @@ const calculateNextDate = (currentDate, value, unit) => {
 
 const getInitialProduct = () => {
   const d = getLocalDateString();
-  return { productName: '', installationDate: d, replacementDate: calculateNextDate(d, '1', 'years'), recurringValue: '1', recurringUnit: 'years' };
+  return { productName: '', installationDate: d, replacementDate: calculateNextDate(d, '1', 'years'), recurringValue: '1', recurringUnit: 'years', productNotes: '' };
 };
 
 const formatActivityFieldLabel = (key) => ACTIVITY_FIELD_LABELS[key] || key.replace(/_/g, ' ');
@@ -294,7 +294,7 @@ function Header({ user, setUser }) {
 
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Pengaturan Profil Akun</h2>
               <button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button>
@@ -534,8 +534,8 @@ function CompanyProductsModal({ company, title, items, onClose, renderAction, sh
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div className="modal-content" style={{ maxWidth: '1200px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="modal-content" style={{ width: '100%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -740,8 +740,8 @@ function TransferModal({ isOpen, onClose, companyId, companyName, fromUserId, fr
   const selectedUser = allUsers.find(u => String(u.id) === String(toUserId));
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div className="modal-content" style={{ maxWidth: '520px', width: '100%' }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="modal-content" style={{ width: '100%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>🔄 Transfer {installationId ? 'Produk' : 'Instalasi'}</h2>
@@ -1392,7 +1392,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               <Cake size={20} /> Ultah PIC Bulan Ini
             </h2>
           </div>
-          <div style={{ padding: '20px' }}>
+          <div style={{ padding: '16px' }}>
             {birthdaysThisMonth.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
                 <p style={{ margin: 0, fontSize: '0.9rem' }}>Tidak ada ulang tahun di bulan ini.</p>
@@ -1428,7 +1428,7 @@ function Dashboard({ companies, regions, installations, pics, systemNotice, setS
               <BarChart3 size={20} /> Sebaran Status
             </h2>
           </div>
-          <div style={{ padding: '20px' }}>
+          <div style={{ padding: '16px' }}>
             {STATUS_OPTIONS.map(status => {
               const count = installations.filter(i => i.status === status && !isHistoryRecord(i.is_history)).length;
               const totalActive = installations.filter(i => !isHistoryRecord(i.is_history)).length || 1;
@@ -1598,11 +1598,11 @@ function CompanyPage({ can, currentUser }) {
           {can('company_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', address: '', industry_id: '', region_id: '', type_id: '2' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah Company</button>}
         </div>
       </div>
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={filteredData} columns={columns} fileName="companies" />}
       </div>
       {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{formData.id ? 'Edit Company' : 'Tambah Company'}</h2><button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{formData.id ? 'Edit Company' : 'Tambah Company'}</h2><button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSave}><div className="modal-body">
             <div style={{ display: 'flex', gap: '16px' }}><div className="form-group" style={{ flex: 1 }}><label>Tipe Data</label><select className="form-control" value={formData.type_id} onChange={e => setFormData({ ...formData, type_id: e.target.value })}>{compTypes.map(t => <option key={t.id} value={t.id}>{t.type_name}</option>)}</select></div><div className="form-group" style={{ flex: 1 }}><label>Nama Perusahaan</label><input required className="form-control" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div></div>
             <div className="form-group"><label>Alamat</label><textarea className="form-control" style={{ height: '80px' }} value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} /></div>
@@ -1697,11 +1697,11 @@ function RegionPage({ can, currentUser }) {
           {can('region_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah Region</button>}
         </div>
       </div>
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={regions.filter(r => showInactive || (r.status || 'active') === 'active')} columns={columns} fileName="regions" />}
       </div>
       {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{formData.id ? 'Edit Region' : 'Tambah Region'}</h2><button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{formData.id ? 'Edit Region' : 'Tambah Region'}</h2><button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSave}><div className="modal-body"><div className="form-group"><label>Nama Region</label><input required className="form-control" type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div></div><div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Batal</button><button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Menyimpan...' : 'Simpan'}</button></div></form>
         </div></div>
       )}
@@ -1835,11 +1835,11 @@ function PICPage({ can, currentUser }) {
           {can('pic_create') && <button className="btn btn-primary" onClick={() => { setFormData({ id: '', name: '', company_id: '', job_title: '', phone: '', email: '', dob: '', address: '' }); setModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px' }}><Plus size={18} /> Tambah PIC</button>}
         </div>
       </div>
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         {isLoading ? <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} style={{ margin: '0 auto' }} color="#0ea5e9" /></div> : <DataTable data={filteredData} columns={columns} fileName="pics" />}
       </div>
       {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h2>{formData.id ? 'Edit PIC' : 'Tambah PIC'}</h2><button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSave}><div className="modal-body">
             <div className="form-group"><label>Nama PIC</label><input required className="form-control" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
@@ -2175,7 +2175,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         </div>
       )}
 
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -2229,7 +2229,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                   </button>
                 </div>
               </div>
-                  {isExpanded && (
+              {isExpanded && (
                 <div style={{ borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ overflowX: 'auto' }}>
                     <table className="data-table" style={{ margin: 0 }}>
@@ -2242,12 +2242,13 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                           <th>Target Ganti</th>
                           <th>Tgl Follow Up</th>
                           <th>Visit Schedule</th>
-                           <th>Status</th>
-                           <th>Status Data</th>
-                           <th>PIC Sales</th>
-                           <th>Total Renew</th>
-                           <th>Audit</th>
-                           <th>Aksi</th>
+                          <th>Status</th>
+                          <th>Status Data</th>
+                          <th>PIC Sales</th>
+                          <th>Notes</th>
+                          <th>Total Renew</th>
+                          <th>Audit</th>
+                          <th>Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2268,12 +2269,13 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                               </td>
                               <td>{row.followup_date || '-'}</td>
                               <td>{row.visit_schedule_date || '-'}</td>
-                               <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
-                               <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
-                               <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
-                               <td><div style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.9rem' }}>{row.renew_count || 0}</div></td>
-                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
-                               <td>
+                              <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
+                              <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
+                              <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
+                              <td><div style={{ maxWidth: '150px', fontSize: '0.75rem', color: '#475569' }}>{row.product_notes || '-'}</div></td>
+                              <td><div style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.9rem' }}>{row.renew_count || 0}</div></td>
+                              <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
+                              <td>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                   {can('sales_update') && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => openGroupEdit(group.company, [row])}>Edit</button>}
                                   {can('sales_update') && row.status !== 'Done' && <button className="btn" style={{ padding: '4px 8px', fontSize: '11px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }} onClick={() => openRenew(row)}>Renew</button>}
@@ -2294,10 +2296,10 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
         <Pagination totalItems={groupedByCompany.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
 
-
+      {/* Modal Input Produk Baru */}
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '950px', width: '95%' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0 }}>Form Pencatatan Instalasi / Penawaran Baru</h2>
@@ -2306,7 +2308,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               <button className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button>
             </div>
             <form onSubmit={handleSave}>
-              <div className="modal-body" style={{ display: 'flex', gap: '24px', flexDirection: 'row', flexWrap: 'wrap', maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="modal-body" style={{ display: 'flex', gap: '24px', flexDirection: 'row', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '300px' }}>
                   <div className="form-group" style={{ marginBottom: '20px' }}>
                     <label style={{ fontWeight: 700, color: '#0f172a' }}>Pilih Klien / Prospek Utama</label>
@@ -2322,7 +2324,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                       <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                           <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Database size={16} color="#0284c7" /> Produk Terpasang Saat Ini
+                            <Database size={16} color="#0284c7" /> Sistem/Produk yang terpasang
                           </h4>
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <span style={{ background: '#e0f2fe', color: '#0284c7', fontSize: '10px', padding: '3px 8px', borderRadius: '10px', fontWeight: 700 }}>{existingProds.length} Aktif</span>
@@ -2399,6 +2401,10 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                               </div>
                             </div>
                           </div>
+                          <div className="form-group" style={{ margin: '12px 0 0 0' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Notes</label>
+                            <textarea className="form-control" rows={3} value={prod.productNotes || ''} onChange={e => updateProductRow(index, 'productNotes', e.target.value)} placeholder="Notes..." />
+                          </div>
                           {formData.products.length > 1 && (
                             <button type="button" onClick={() => setFormData({ ...formData, products: formData.products.filter((_, i) => i !== index) })} style={{ position: 'absolute', top: '-10px', right: '-10px', width: '24px', height: '24px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
                               <X size={14} />
@@ -2426,7 +2432,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
       {editModal && editCompany && (
         <div className="modal-overlay" onClick={() => setEditModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '1000px', width: '95%' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2437,7 +2443,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
               </div>
               <button className="close-btn" onClick={() => setEditModal(false)}><X size={24} /></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+            <div className="modal-body" >
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {editItems.map((item, idx) => {
                   const diff = Math.ceil((new Date(item.replacement_date) - new Date()) / 86400000);
@@ -2494,7 +2500,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
                         </div>
                         <div className="form-group" style={{ margin: 0 }}>
                           <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Catatan</label>
-                          <input className="form-control" value={item.notes || ''} onChange={e => updateEditItem(idx, 'notes', e.target.value)} placeholder="Catatan..." />
+                          <textarea className="form-control" rows={3} value={item.notes || ''} onChange={e => updateEditItem(idx, 'notes', e.target.value)} placeholder="Catatan..." />
                         </div>
                       </div>
                     </div>
@@ -2517,7 +2523,7 @@ function SalesPage({ companies, regions, installations, setInstallations, can, c
 
       {renewModal && renewData && (
         <div className="modal-overlay" onClick={() => setRenewModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0 }}>Perpanjang / Renew Produk</h2>
@@ -2810,13 +2816,13 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
           }} />
           <datalist id="inst-region-list">{regions.map(r => <option key={r.id} value={r.region_name} />)}</datalist>
         </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-            <Calendar size={16} color="#64748b" />
-            <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>Tgl Instalasi</span>
-            <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallStart} onChange={e => { setFilterInstallStart(e.target.value); setCurrentPage(1); }} />
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>s/d</span>
-            <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallEnd} onChange={e => { setFilterInstallEnd(e.target.value); setCurrentPage(1); }} />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+          <Calendar size={16} color="#64748b" />
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>Tgl Instalasi</span>
+          <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallStart} onChange={e => { setFilterInstallStart(e.target.value); setCurrentPage(1); }} />
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>s/d</span>
+          <input type="date" className="form-control" style={{ padding: '6px', fontSize: '0.8rem', width: '130px' }} value={filterInstallEnd} onChange={e => { setFilterInstallEnd(e.target.value); setCurrentPage(1); }} />
+        </div>
       </div>
 
       <div className="card-view" style={{ padding: '20px', marginTop: '0' }}>
@@ -2871,6 +2877,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
                           <th>Status</th>
                           <th>Status Data</th>
                           <th>PIC Sales</th>
+                          <th>Notes</th>
                           <th>Total Renew</th>
                           <th>Audit</th>
                           <th>Aksi</th>
@@ -2896,6 +2903,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
                               <td><span className={`badge ${row.status === 'Done' ? 'badge-success' : row.status === 'Skip' ? 'badge-danger' : 'badge-info'}`}>{row.status}</span></td>
                               <td><span className={`badge ${isInactive ? 'badge-danger' : 'badge-success'}`}>{isInactive ? 'Non-Aktif' : 'Aktif'}</span></td>
                               <td><div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.85rem' }}>{row.assigned_to_name || '-'}</div></td>
+                              <td><div style={{ maxWidth: '150px', fontSize: '0.75rem', color: '#475569' }}>{row.product_notes || '-'}</div></td>
                               <td><div style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.9rem' }}>{row.renew_count || 0}</div></td>
                               <td><div style={{ fontSize: '10px', color: '#94a3b8' }}><div>Oleh: {row.creator_name || '-'}</div><div>Ubah: {row.last_editor_name || '-'}</div></div></td>
                               <td>
@@ -2921,7 +2929,7 @@ function InstallationPage({ installations, regions, can, currentUser, setInstall
       {/* Single Item Edit Modal */}
       {editModal && editData && (
         <div className="modal-overlay" onClick={() => { setEditModal(false); setEditData(null); }}>
-          <div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Edit Detail Instalasi</h2>
               <button className="close-btn" onClick={() => { setEditModal(false); setEditData(null); }}><X size={24} /></button>
@@ -3208,7 +3216,7 @@ function ProspectingPage({ installations, can, regions, currentUser, onAssignmen
         </div>
       )}
 
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -3304,7 +3312,7 @@ function ProspectingPage({ installations, can, regions, currentUser, onAssignmen
 
       {assignModalOpen && (
         <div className="modal-overlay" onClick={() => setAssignModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Atur Jadwal Kunjungan</h2>
               <button className="close-btn" onClick={() => setAssignModalOpen(false)}><X size={24} /></button>
@@ -3599,8 +3607,8 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
 
       {/* === RENEW MODAL FORM === */}
       {renewModalOpen && (
-        <div className="modal-overlay" onClick={() => setRenewModalOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="modal-content" style={{ maxWidth: '640px', width: '100%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setRenewModalOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="modal-content" style={{ width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>🔄 Form Perpanjangan (Renew)</h2>
@@ -3609,7 +3617,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
               <button className="close-btn" onClick={() => setRenewModalOpen(false)}><X size={24} /></button>
             </div>
             <form onSubmit={handleRenewSubmit}>
-              <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+              <div className="modal-body" >
                 {/* Current Info Summary */}
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>📋 Data Siklus Saat Ini (Akan diarsipkan)</div>
@@ -3622,7 +3630,7 @@ function WorkOrderPage({ installations, setInstallations, companies, can, curren
                 </div>
 
                 {/* New Cycle Form */}
-                <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #bae6fd', borderRadius: '10px', padding: '20px' }}>
+                <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #bae6fd', borderRadius: '10px', padding: '16px' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>🆕 Data Siklus Baru</div>
 
                   <div className="form-group" style={{ marginBottom: '14px' }}>
@@ -3724,7 +3732,7 @@ function HistoryPage({ installations, companies, can, regions, currentUser }) {
         installations: installationsJson.status === 'success' ? installationsJson.data : prev.installations,
         companies: companiesJson.status === 'success' ? companiesJson.data : prev.companies
       }));
-    }).catch(() => {});
+    }).catch(() => { });
 
     return () => { cancelled = true; };
   }, [currentUser?.id, canHistoryShowAll]);
@@ -4079,7 +4087,7 @@ function UserPage({ can, currentUser }) {
         </div>
       </div>
 
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         {isLoadingData ? (
           <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
@@ -4087,7 +4095,7 @@ function UserPage({ can, currentUser }) {
         )}
       </div>
       {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h2>{isEdit ? 'Ubah Data User' : 'Registrasi User Baru'}</h2><button type="button" className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSubmit}><div className="modal-body">
             <div className="form-group"><label>Username</label><input required className="form-control" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} disabled={isEdit} placeholder="Username" /></div>
@@ -4228,7 +4236,7 @@ function RolePage({ can, currentUser }) {
         </div>
       </div>
 
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '40px' }}><Loader2 className="animate-spin" style={{ margin: '0 auto' }} size={32} color="#0ea5e9" /></div>
         ) : (
@@ -4237,7 +4245,7 @@ function RolePage({ can, currentUser }) {
       </div>
 
       {editModal && (
-        <div className="modal-overlay" onClick={() => setEditModal(false)}><div className="modal-content" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setEditModal(false)}><div className="modal-content" onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h2>{isEdit ? 'Edit Role' : 'Tambah Role Baru'}</h2><button className="close-btn" onClick={() => setEditModal(false)}><X size={24} /></button></div>
           <form onSubmit={handleEditSave}><div className="modal-body">
             <div className="form-group"><label>Nama Role</label><input required className="form-control" value={editForm.role_name} onChange={e => setEditForm({ ...editForm, role_name: e.target.value })} /></div>
@@ -4249,7 +4257,7 @@ function RolePage({ can, currentUser }) {
       )}
 
       {permModal && (
-        <div className="modal-overlay" onClick={() => setPermModal(false)}><div className="modal-content" style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setPermModal(false)}><div className="modal-content" onClick={e => e.stopPropagation()}>
           <div className="modal-header">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <h2 style={{ margin: 0 }}>Otoritas Role: <span style={{ color: '#0ea5e9' }}>{permRoleName}</span></h2>
@@ -4261,7 +4269,7 @@ function RolePage({ can, currentUser }) {
             </div>
             <button className="close-btn" onClick={() => setPermModal(false)}><X size={24} /></button>
           </div>
-          <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto', background: '#f8fafc', padding: '20px' }}>
+          <div className="modal-body" style={{ background: '#f8fafc', padding: '16px' }}>
             <p style={{ marginBottom: '20px', fontSize: '14px', color: '#64748b', background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <ShieldCheck size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px', color: '#0ea5e9' }} />
               Pilih hak akses untuk role ini. Perubahan akan langsung disimpan ke database.
@@ -4406,12 +4414,12 @@ function TeamPage({ can, currentUser }) {
         </div>
       </div>
 
-      <div className="card-view" style={{ padding: '20px' }}>
+      <div className="card-view" style={{ padding: '16px' }}>
         <DataTable data={teams.filter(t => showInactive || (t.status || 'active') === 'active')} columns={columns} fileName="master-teams" />
       </div>
 
       {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ maxWidth: '800px', width: '95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}><div className="modal-content" style={{ width: '100%' }} onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h2>{isEdit ? 'Ubah Data Tim' : 'Buat Tim Baru'}</h2><button type="button" className="close-btn" onClick={() => setModalOpen(false)}><X size={24} /></button></div>
           <form onSubmit={handleSubmit}><div className="modal-body" style={{ display: 'flex', gap: '24px', flexDirection: 'row', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '300px' }}>
@@ -4579,26 +4587,26 @@ export default function App() {
         <Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/*" element={
           user?.id ? (
-          <div className="app-container">
-            <Sidebar permissions={permissions} user={user} />
-            <main className="main-content">
-              <Header user={user} setUser={setUser} />
-              <Routes>
-                <Route path="/" element={can('dashboard_read') ? <Dashboard companies={companies} regions={regions} installations={installations} pics={pics} systemNotice={systemNotice} setSystemNotice={setSystemNotice} can={can} /> : <Navigate to="/login" replace />} />
-                <Route path="/company" element={can('company_read') ? <CompanyPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/pic" element={can('pic_read') ? <PICPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <Navigate to="/login" replace />} />
-                <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <Navigate to="/login" replace />} />
-                <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/master-role" element={can('role_read') ? <RolePage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/master-team" element={can('team_read') ? <TeamPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
-              </Routes>
-            </main>
-          </div>
+            <div className="app-container">
+              <Sidebar permissions={permissions} user={user} />
+              <main className="main-content">
+                <Header user={user} setUser={setUser} />
+                <Routes>
+                  <Route path="/" element={can('dashboard_read') ? <Dashboard companies={companies} regions={regions} installations={installations} pics={pics} systemNotice={systemNotice} setSystemNotice={setSystemNotice} can={can} /> : <Navigate to="/login" replace />} />
+                  <Route path="/company" element={can('company_read') ? <CompanyPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/pic" element={can('pic_read') ? <PICPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/master-region" element={can('region_read') ? <RegionPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/sales" element={can('sales_read') ? <SalesPage companies={companies} regions={regions} installations={installations} setInstallations={setInstallations} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/installation" element={can('installation_read') ? <InstallationPage installations={installations} regions={regions} can={can} currentUser={user} setInstallations={setInstallations} /> : <Navigate to="/login" replace />} />
+                  <Route path="/prospecting" element={can('prospecting_read') ? <ProspectingPage installations={installations} can={can} regions={regions} currentUser={user} onAssignmentDone={fetchData} /> : <Navigate to="/login" replace />} />
+                  <Route path="/work-order" element={can('workorder_read') ? <WorkOrderPage installations={installations} setInstallations={setInstallations} companies={companies} can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/history" element={can('history_read') ? <HistoryPage installations={installations} companies={companies} can={can} regions={regions} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/master-user" element={can('user_read') ? <UserPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/master-role" element={can('role_read') ? <RolePage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                  <Route path="/master-team" element={can('team_read') ? <TeamPage can={can} currentUser={user} /> : <Navigate to="/login" replace />} />
+                </Routes>
+              </main>
+            </div>
           ) : <Navigate to="/login" replace />
         } />
       </Routes>

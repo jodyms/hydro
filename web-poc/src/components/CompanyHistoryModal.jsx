@@ -189,8 +189,8 @@ function CompanyHistoryModalInner({ onClose, company, historyItems }) {
   ).sort();
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div className="modal-content" style={{ maxWidth: '1000px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="modal-content" style={{ width: '100%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
